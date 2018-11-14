@@ -1,4 +1,4 @@
-package connection
+package ibc
 
 import (
 	"github.com/tendermint/tendermint/crypto/tmhash"

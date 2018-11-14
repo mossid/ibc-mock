@@ -1,4 +1,4 @@
-package connection
+package ibc
 
 import (
 	"github.com/cosmos/cosmos-sdk/codec"

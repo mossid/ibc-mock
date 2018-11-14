@@ -1,11 +1,7 @@
-package connection
+package ibc
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-)
-
-const (
-	Route = "ibc"
 )
 
 type MsgOpenConnection struct {
@@ -44,5 +40,21 @@ type PayloadConnectionListening struct {
 var _ Payload = PayloadConnectionListening{}
 
 func (pay PayloadConnectionListening) Route() string {
-	return "ibc"
+	return Route
+}
+
+func (pay PayloadConnectionListening) Type() string {
+	return "payload_connection_listening"
+}
+
+func (pay PayloadConnectionListening) ValidateBasic() sdk.Error {
+	return nil
+}
+
+func (pay PayloadConnectionListening) GetSignBytes() []byte {
+	return cdc.MustMarshalJSON(pay) //TODO
+}
+
+func (pay PayloadConnectionListening) QueueID() QueueID {
+	return PacketQueueID()
 }

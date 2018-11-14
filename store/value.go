@@ -23,6 +23,13 @@ func (v Value) Get(ptr interface{}) {
 	v.cdc.MustUnmarshalBinaryBare(v.store.Get(v.key), ptr)
 }
 
+func (v Value) GetIfExists(ptr interface{}) {
+	bz := v.store.Get(v.key)
+	if bz != nil {
+		v.cdc.MustUnmarshalBinaryBare(bz, ptr)
+	}
+}
+
 func (v Value) Set(o interface{}) {
 	v.store.Set(v.key, v.cdc.MustMarshalBinaryBare(o))
 }
@@ -31,4 +38,6 @@ func (v Value) Exists() bool {
 	return v.store.Has(v.key)
 }
 
-//...
+func (v Value) Delete() {
+	v.store.Delete(v.key)
+}

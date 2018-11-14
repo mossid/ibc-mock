@@ -1,4 +1,4 @@
-package connection
+package ibc
 
 import (
 	"github.com/tendermint/go-amino"
@@ -13,7 +13,8 @@ type Keeper struct {
 	key sdk.StoreKey
 	cdc *codec.Codec
 
-	perconn ChannelTemplate
+	// Using pointer to avoid recursive type
+	perconn *ChannelTemplate
 
 	chs map[string]ChannelCore
 }
@@ -26,7 +27,8 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) Keeper {
 		cdc: cdc,
 	}
 
-	k.perconn = k.ChannelTemplate("ibc")
+	perconn := k.ChannelTemplate("ibc")
+	k.perconn = &perconn
 
 	return k
 }
@@ -62,16 +64,18 @@ func ChainCommitsPrefix(srcChain []byte) []byte {
 	return append([]byte{0x02}, amino.MustMarshalBinaryLengthPrefixed(srcChain)...)
 }
 
-func (k Keeper) chainCommits(ctx sdk.Context, srcChain []byte) store.List {
-	return store.NewList(
+func (k Keeper) chainCommits(ctx sdk.Context, srcChain []byte) store.Indexer {
+	return store.NewIndexer(
 		k.cdc,
-		store.NewPrefixStore(ctx.KVStore(k.key), ChainCommitsPrefix(srcChain)),
+		ctx.KVStore(k.key),
+		ChainCommitsPrefix(srcChain),
+		store.BinIndexerEnc,
 	)
 }
 
 // ----------------------------------------
 // Remote chain per connection channel
-func (k Keeper) perConnectionChannel(ctx sdk.Context, destChain []byte) PerConnectionChannel {
+func (k Keeper) perConnectionChannel(destChain []byte) PerConnectionChannel {
 	return PerConnectionChannel{
 		core: k.perconn.Instanciate(destChain),
 	}
@@ -83,10 +87,12 @@ func CheckpointPrefix() []byte {
 	return []byte{0x20}
 }
 
-func (k Keeper) checkpointList(ctx sdk.Context) store.List {
-	return store.NewList(
+func (k Keeper) checkpointList(ctx sdk.Context) store.Indexer {
+	return store.NewIndexer(
 		k.cdc,
-		store.NewPrefixStore(ctx.KVStore(k.key), CheckpointPrefix()),
+		ctx.KVStore(k.key),
+		CheckpointPrefix(),
+		store.BinIndexerEnc,
 	)
 }
 
@@ -97,16 +103,19 @@ func (k Keeper) existsChain(ctx sdk.Context, id []byte) bool {
 	return k.chainConfig(ctx, id).Exists()
 }
 
+func (ch PerConnectionChannel) Register(ctx sdk.Context, config ConnectionConfig, id []byte) {
+	pay := PayloadConnectionListening{config, id}
+	ch.core.send(ctx, pay, PacketQueueID(), id)
+}
+
 func (k Keeper) registerChain(ctx sdk.Context, id []byte, config ConnectionConfig) {
 	k.chainConfig(ctx, id).Set(config)
 	k.chainHeight(ctx, id).Set(config.Height())
 	k.chainCommits(ctx, id).Set(config.Height(), config.ROT)
 
 	// Sending
-	k.perConnectionChannel(ctx, id).Send(PayloadConnectionListening{config, id})
+	k.perConnectionChannel(id).register(ctx, config, id)
 }
 
 // ---------------------------------------
 //
-
-func (k Keeper) channelStore(key *ChannelKey)
