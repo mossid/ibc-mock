@@ -6,10 +6,10 @@ import (
 	"strconv"
 )
 
-type IndexerKeyEncoding byte
+type IndexEncoding byte
 
 const (
-	DecIndexerEnc IndexerKeyEncoding = iota
+	DecIndexerEnc IndexEncoding = iota
 	HexIndexerEnc
 	BinIndexerEnc
 )
@@ -17,17 +17,18 @@ const (
 type Indexer struct {
 	m Mapping
 
-	enc IndexerKeyEncoding
+	enc IndexEncoding
 }
 
-func NewIndexer(base Base, prefix []byte, enc IndexerKeyEncoding) Indexer {
+func NewIndexer(base Base, prefix []byte, enc IndexEncoding) Indexer {
 	return Indexer{
 		m:   NewMapping(base, prefix),
 		enc: enc,
 	}
 }
 
-func ElemKey(index uint64, enc IndexerKeyEncoding) (res []byte) {
+// Identical length independent from the index, ensure ordering
+func EncodeIndex(index uint64, enc IndexEncoding) (res []byte) {
 	switch enc {
 	case DecIndexerEnc:
 		return []byte(fmt.Sprintf("%020d", index))
@@ -38,11 +39,11 @@ func ElemKey(index uint64, enc IndexerKeyEncoding) (res []byte) {
 		binary.BigEndian.PutUint64(res, index)
 		return
 	default:
-		panic("invalid IndexerKeyEncoding")
+		panic("invalid IndexEncoding")
 	}
 }
 
-func DecodeElemKey(bz []byte, enc IndexerKeyEncoding) (res uint64, err error) {
+func DecodeIndex(bz []byte, enc IndexEncoding) (res uint64, err error) {
 	switch enc {
 	case DecIndexerEnc:
 		return strconv.ParseUint(string(bz), 10, 64)
@@ -51,28 +52,28 @@ func DecodeElemKey(bz []byte, enc IndexerKeyEncoding) (res uint64, err error) {
 	case BinIndexerEnc:
 		return binary.BigEndian.Uint64(bz), nil
 	default:
-		panic("invalid IndexerKeyEncoding")
+		panic("invalid IndexEncoding")
 	}
 }
 
 func (ix Indexer) Get(ctx Context, index uint64, ptr interface{}) {
-	ix.m.Get(ctx, ElemKey(index, ix.enc), ptr)
+	ix.m.Get(ctx, EncodeIndex(index, ix.enc), ptr)
 }
 
 func (ix Indexer) GetIfExists(ctx Context, index uint64, ptr interface{}) {
-	ix.m.GetIfExists(ctx, ElemKey(index, ix.enc), ptr)
+	ix.m.GetIfExists(ctx, EncodeIndex(index, ix.enc), ptr)
 }
 
 func (ix Indexer) Set(ctx Context, index uint64, o interface{}) {
-	ix.m.Set(ctx, ElemKey(index, ix.enc), o)
+	ix.m.Set(ctx, EncodeIndex(index, ix.enc), o)
 }
 
 func (ix Indexer) Has(ctx Context, index uint64) bool {
-	return ix.m.Has(ctx, ElemKey(index, ix.enc))
+	return ix.m.Has(ctx, EncodeIndex(index, ix.enc))
 }
 
 func (ix Indexer) Delete(ctx Context, index uint64) {
-	ix.m.Delete(ctx, ElemKey(index, ix.enc))
+	ix.m.Delete(ctx, EncodeIndex(index, ix.enc))
 }
 
 func (ix Indexer) IsEmpty(ctx Context) bool {
@@ -89,7 +90,7 @@ func (ix Indexer) Prefix(prefix []byte) Indexer {
 
 func (ix Indexer) Iterate(ctx Context, ptr interface{}, fn func(uint64) bool) {
 	ix.m.Iterate(ctx, ptr, func(bz []byte) bool {
-		key, err := DecodeElemKey(bz, ix.enc)
+		key, err := DecodeIndex(bz, ix.enc)
 		if err != nil {
 			panic(err)
 		}
@@ -103,7 +104,7 @@ func (ix Indexer) First(ctx Context, ptr interface{}) (key uint64, ok bool) {
 		return
 	}
 	if len(keybz) != 0 {
-		key, err := DecodeElemKey(keybz, ix.enc)
+		key, err := DecodeIndex(keybz, ix.enc)
 		if err != nil {
 			return key, false
 		}
@@ -117,7 +118,7 @@ func (ix Indexer) Last(ctx Context, ptr interface{}) (key uint64, ok bool) {
 		return
 	}
 	if len(keybz) != 0 {
-		key, err := DecodeElemKey(keybz, ix.enc)
+		key, err := DecodeIndex(keybz, ix.enc)
 		if err != nil {
 			return key, false
 		}

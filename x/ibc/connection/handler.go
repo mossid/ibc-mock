@@ -1,6 +1,8 @@
 package connection
 
 import (
+	abci "github.com/tendermint/tendermint/abci/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -25,4 +27,14 @@ func handleMsgOpenConnection(ctx sdk.Context, k Keeper, msg MsgOpenConnection) s
 	return sdk.Result{} // TODO: add tags
 }
 
-//func InitGenesis(ctx sdk.Context, k Keeper)
+var (
+	// TODO: move it to parameter store
+	DIFFREQ = sdk.NewDec(5).Quo(sdk.NewDec(6)) // 2/3 + (1/3)/2
+)
+
+func BeginBlocker(ctx sdk.Context, k Keeper, header abci.Header) {
+	if header.Height == 1 || !IsContinuous(ctx, k.checkpointer.lastvalset, k.valset, DIFFREQ) {
+		k.checkpointer.lastvalset.Snapshot(ctx, k.valset)
+		k.checkpointer.checkpoints.Set(ctx, uint64(header.Height), header)
+	}
+}

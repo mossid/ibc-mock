@@ -66,7 +66,7 @@ func (m Mapping) Delete(ctx Context, key []byte) {
 	m.Value(key).Delete(ctx)
 }
 
-func (m Mapping) IsEmpty(ctx Context) (ok bool) {
+func (m Mapping) IsEmpty(ctx Context) bool {
 	iter := m.base.store(ctx).Iterator(nil, nil)
 	defer iter.Close()
 	return iter.Valid()
@@ -84,7 +84,26 @@ func (m Mapping) Iterate(ctx Context, ptr interface{}, fn func([]byte) bool) {
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		v := iter.Value()
-		m.base.MustUnmarshalBinaryBare(v, ptr)
+
+		if ptr != nil {
+			m.base.MustUnmarshalBinaryBare(v, ptr)
+		}
+
+		if fn(iter.Key()) {
+			break
+		}
+	}
+}
+
+func (m Mapping) ReverseIterate(ctx Context, ptr interface{}, fn func([]byte) bool) {
+	iter := m.base.store(ctx).ReverseIterator(nil, nil)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		v := iter.Value()
+
+		if ptr != nil {
+			m.base.MustUnmarshalBinaryBare(v, ptr)
+		}
 
 		if fn(iter.Key()) {
 			break
@@ -114,4 +133,17 @@ func (m Mapping) Last(ctx Context, ptr interface{}) (key []byte, ok bool) {
 		m.base.MustUnmarshalBinaryBare(kvp.Value, ptr)
 	}
 	return
+}
+
+func (m Mapping) Clear(ctx Context) {
+	var keys [][]byte
+	m.Iterate(ctx, nil, func(key []byte) (stop bool) {
+		keys = append(keys, key)
+		return
+	})
+
+	store := m.base.store(ctx)
+	for _, key := range keys {
+		store.Delete(key)
+	}
 }

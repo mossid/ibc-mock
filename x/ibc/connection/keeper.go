@@ -17,24 +17,34 @@ type remote struct {
 	commits store.Indexer // (chainID []byte prefix) -> height int64 -> lite.FullCommit
 }
 
+type checkpointer struct {
+	lastvalset  SnapshotValidatorSet
+	checkpoints store.Indexer // height uint64 -> Header
+}
+
 type local struct {
-	config      store.Value   // ChainConfig
-	checkpoints store.Indexer // height uint64 -> lite.FullCommit
+	config store.Value // ChainConfig
 }
 
 type Keeper struct {
+	// keeper base elements
 	cdc *codec.Codec
 	key sdk.StoreKey
 
-	remote remote
-	local  local
+	// storage accessor
+	remote       remote
+	local        local
+	checkpointer checkpointer
 
+	// local multistore
 	chstore *store.MultiStore
 
+	// external reference
 	perconn ch.PerConnectionTemplate
+	valset  ValidatorSet
 }
 
-func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) (k Keeper) {
+func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset ValidatorSet) (k Keeper) {
 	base := store.NewBase(cdc, key)
 
 	// Implementing as prefixstore for now
@@ -49,11 +59,19 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) (k Keeper) {
 			commits: store.NewIndexer(base, []byte{0x02}, store.BinIndexerEnc),
 		},
 		local: local{
-			config:      store.NewValue(base, []byte{0x20}),
-			checkpoints: store.NewIndexer(base, []byte{0x21}, store.BinIndexerEnc),
+			config: store.NewValue(base, []byte{0x20}),
+		},
+		checkpointer: checkpointer{
+			lastvalset: SnapshotValidatorSet{
+				byconsaddr: store.NewMapping(base, []byte{0x30}),
+				bypower:    store.NewSorted(base, []byte{0x31}, store.BinIndexerEnc),
+				totalpower: store.NewValue(base, []byte{0x32}),
+			},
+			checkpoints: store.NewIndexer(base, []byte{0x33}, store.BinIndexerEnc),
 		},
 
 		chstore: store.NewMultiStore(key),
+		valset:  valset,
 	}
 
 	tem := k.ChannelTemplate("ibc", ch.PerConnectionChannelType())
