@@ -4,9 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
-
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 type IndexerKeyEncoding byte
@@ -23,9 +20,9 @@ type Indexer struct {
 	enc IndexerKeyEncoding
 }
 
-func NewIndexer(cdc *codec.Codec, store sdk.KVStore, prefix []byte, enc IndexerKeyEncoding) Indexer {
+func NewIndexer(base Base, prefix []byte, enc IndexerKeyEncoding) Indexer {
 	return Indexer{
-		m:   NewMapping(cdc, store, prefix),
+		m:   NewMapping(base, prefix),
 		enc: enc,
 	}
 }
@@ -58,32 +55,40 @@ func DecodeElemKey(bz []byte, enc IndexerKeyEncoding) (res uint64, err error) {
 	}
 }
 
-func (ix Indexer) Get(index uint64, ptr interface{}) {
-	ix.m.Get(ElemKey(index, ix.enc), ptr)
+func (ix Indexer) Get(ctx Context, index uint64, ptr interface{}) {
+	ix.m.Get(ctx, ElemKey(index, ix.enc), ptr)
 }
 
-func (ix Indexer) GetIfExists(index uint64, ptr interface{}) {
-	ix.m.GetIfExists(ElemKey(index, ix.enc), ptr)
+func (ix Indexer) GetIfExists(ctx Context, index uint64, ptr interface{}) {
+	ix.m.GetIfExists(ctx, ElemKey(index, ix.enc), ptr)
 }
 
-func (ix Indexer) Set(index uint64, o interface{}) {
-	ix.m.Set(ElemKey(index, ix.enc), o)
+func (ix Indexer) Set(ctx Context, index uint64, o interface{}) {
+	ix.m.Set(ctx, ElemKey(index, ix.enc), o)
 }
 
-func (ix Indexer) Has(index uint64) bool {
-	return ix.m.Has(ElemKey(index, ix.enc))
+func (ix Indexer) Has(ctx Context, index uint64) bool {
+	return ix.m.Has(ctx, ElemKey(index, ix.enc))
 }
 
-func (ix Indexer) Delete(index uint64) {
-	ix.m.Delete(ElemKey(index, ix.enc))
+func (ix Indexer) Delete(ctx Context, index uint64) {
+	ix.m.Delete(ctx, ElemKey(index, ix.enc))
 }
 
-func (ix Indexer) IsEmpty() bool {
-	return ix.m.IsEmpty()
+func (ix Indexer) IsEmpty(ctx Context) bool {
+	return ix.m.IsEmpty(ctx)
 }
 
-func (ix Indexer) Iterate(ptr interface{}, fn func(uint64) bool) {
-	ix.m.Iterate(ptr, func(bz []byte) bool {
+func (ix Indexer) Prefix(prefix []byte) Indexer {
+	return Indexer{
+		m: ix.m.Prefix(prefix),
+
+		enc: ix.enc,
+	}
+}
+
+func (ix Indexer) Iterate(ctx Context, ptr interface{}, fn func(uint64) bool) {
+	ix.m.Iterate(ctx, ptr, func(bz []byte) bool {
 		key, err := DecodeElemKey(bz, ix.enc)
 		if err != nil {
 			panic(err)
@@ -92,8 +97,8 @@ func (ix Indexer) Iterate(ptr interface{}, fn func(uint64) bool) {
 	})
 }
 
-func (ix Indexer) First(ptr interface{}) (key uint64, ok bool) {
-	keybz, ok := ix.m.First(ptr)
+func (ix Indexer) First(ctx Context, ptr interface{}) (key uint64, ok bool) {
+	keybz, ok := ix.m.First(ctx, ptr)
 	if !ok {
 		return
 	}
@@ -106,8 +111,8 @@ func (ix Indexer) First(ptr interface{}) (key uint64, ok bool) {
 	return
 }
 
-func (ix Indexer) Last(ptr interface{}) (key uint64, ok bool) {
-	keybz, ok := ix.m.Last(ptr)
+func (ix Indexer) Last(ctx Context, ptr interface{}) (key uint64, ok bool) {
+	keybz, ok := ix.m.Last(ctx, ptr)
 	if !ok {
 		return
 	}

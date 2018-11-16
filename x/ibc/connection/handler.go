@@ -1,4 +1,4 @@
-package ibc
+package connection
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -24,3 +24,5 @@ func handleMsgOpenConnection(ctx sdk.Context, k Keeper, msg MsgOpenConnection) s
 
 	return sdk.Result{} // TODO: add tags
 }
+
+//func InitGenesis(ctx sdk.Context, k Keeper)

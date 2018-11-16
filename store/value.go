@@ -1,43 +1,40 @@
 package store
 
-import (
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-)
-
 type Value struct {
-	cdc   *codec.Codec
-	store sdk.KVStore
-	key   []byte
+	base Base
+	key  []byte
 }
 
-func NewValue(cdc *codec.Codec, store sdk.KVStore, key []byte) Value {
+func NewValue(base Base, key []byte) Value {
 	return Value{
-		cdc:   cdc,
-		store: store,
-		key:   key,
+		base: base,
+		key:  key,
 	}
 }
 
-func (v Value) Get(ptr interface{}) {
-	v.cdc.MustUnmarshalBinaryBare(v.store.Get(v.key), ptr)
+func (v Value) store(ctx Context) KVStore {
+	return v.base.store(ctx)
 }
 
-func (v Value) GetIfExists(ptr interface{}) {
-	bz := v.store.Get(v.key)
+func (v Value) Get(ctx Context, ptr interface{}) {
+	v.base.MustUnmarshalBinaryBare(v.store(ctx).Get(v.key), ptr)
+}
+
+func (v Value) GetIfExists(ctx Context, ptr interface{}) {
+	bz := v.store(ctx).Get(v.key)
 	if bz != nil {
-		v.cdc.MustUnmarshalBinaryBare(bz, ptr)
+		v.base.MustUnmarshalBinaryBare(bz, ptr)
 	}
 }
 
-func (v Value) Set(o interface{}) {
-	v.store.Set(v.key, v.cdc.MustMarshalBinaryBare(o))
+func (v Value) Set(ctx Context, o interface{}) {
+	v.store(ctx).Set(v.key, v.base.MustMarshalBinaryBare(o))
 }
 
-func (v Value) Exists() bool {
-	return v.store.Has(v.key)
+func (v Value) Exists(ctx Context) bool {
+	return v.store(ctx).Has(v.key)
 }
 
-func (v Value) Delete() {
-	v.store.Delete(v.key)
+func (v Value) Delete(ctx Context) {
+	v.store(ctx).Delete(v.key)
 }

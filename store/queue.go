@@ -1,42 +1,43 @@
 package store
 
-import (
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-)
-
 type Queue struct {
 	Indexer
 }
 
-func NewQueue(cdc *codec.Codec, store sdk.KVStore, prefix []byte, enc IndexerKeyEncoding) Queue {
+func NewQueue(base Base, prefix []byte, enc IndexerKeyEncoding) Queue {
 	return Queue{
-		Indexer: NewIndexer(cdc, store, prefix, enc),
+		Indexer: NewIndexer(base, prefix, enc),
 	}
 }
 
-func (q Queue) Peek(ptr interface{}) (ok bool) {
-	_, ok = q.First(ptr)
+func (q Queue) Prefix(prefix []byte) Queue {
+	return Queue{
+		Indexer: q.Indexer.Prefix(prefix),
+	}
+}
+
+func (q Queue) Peek(ctx Context, ptr interface{}) (ok bool) {
+	_, ok = q.First(ctx, ptr)
 	return
 }
 
-func (q Queue) Pop(ptr interface{}) (ok bool) {
-	key, ok := q.First(ptr)
+func (q Queue) Pop(ctx Context, ptr interface{}) (ok bool) {
+	key, ok := q.First(ctx, ptr)
 	if !ok {
 		return
 	}
 
-	q.Delete(key)
+	q.Delete(ctx, key)
 	return
 }
 
-func (q Queue) Push(o interface{}) {
-	key, ok := q.Last(nil)
+func (q Queue) Push(ctx Context, o interface{}) {
+	key, ok := q.Last(ctx, nil)
 	if !ok {
 		key = 0
 	} else {
 		key = key + 1
 	}
 
-	q.Set(key, o)
+	q.Set(ctx, key, o)
 }
