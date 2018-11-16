@@ -41,14 +41,11 @@ type Keeper struct {
 
 	// external reference
 	perconn ch.PerConnectionTemplate
-	valset  ValidatorSet
 }
 
 func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset ValidatorSet) (k Keeper) {
 	base := store.NewBase(cdc, key)
 
-	// Implementing as prefixstore for now
-	// TODO: change it to rootmultistore
 	k = Keeper{
 		cdc: cdc,
 		key: key,
@@ -66,12 +63,13 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset ValidatorSet) (k Keepe
 				byconsaddr: store.NewMapping(base, []byte{0x30}),
 				bypower:    store.NewSorted(base, []byte{0x31}, store.BinIndexerEnc),
 				totalpower: store.NewValue(base, []byte{0x32}),
+				valset:     valset,
 			},
 			checkpoints: store.NewIndexer(base, []byte{0x33}, store.BinIndexerEnc),
 		},
-
+		// Implementing as store.MultiStore(which is just a prefixstore) for now
+		// TODO: change it to rootmultistore
 		chstore: store.NewMultiStore(key),
-		valset:  valset,
 	}
 
 	tem := k.ChannelTemplate("ibc", ch.PerConnectionChannelType())

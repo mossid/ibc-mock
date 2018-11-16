@@ -51,16 +51,18 @@ type SnapshotValidatorSet struct {
 	byconsaddr store.Mapping
 	bypower    store.Sorted
 	totalpower store.Value
+
+	valset ValidatorSet
 }
 
 var _ ValidatorSet = SnapshotValidatorSet{}
 
-func (valset SnapshotValidatorSet) Snapshot(ctx sdk.Context, target ValidatorSet) {
+func (valset SnapshotValidatorSet) Snapshot(ctx sdk.Context) {
 	// TODO: make it efficient
 	valset.byconsaddr.Clear(ctx)
 	valset.bypower.Clear(ctx)
 
-	target.IterateBondedValidatorsByPower(ctx, func(_ int64, v Validator) (stop bool) {
+	valset.valset.IterateBondedValidatorsByPower(ctx, func(_ int64, v Validator) (stop bool) {
 		valset.byconsaddr.Set(ctx, v.GetConsAddr(), v.GetOperator())
 		valset.bypower.Set(ctx, uint64(v.GetPower().RoundInt64()), v.GetOperator(), v)
 		return
@@ -87,12 +89,12 @@ func (valset SnapshotValidatorSet) TotalPower(ctx sdk.Context) (res sdk.Dec) {
 	return
 }
 
-func IsContinuous(ctx sdk.Context, prevset ValidatorSet, nowset ValidatorSet, diffreq sdk.Dec) (res bool) {
-	required := prevset.TotalPower(ctx)
+func (valset SnapshotValidatorSet) IsStillValid(ctx sdk.Context, diffreq sdk.Dec) (res bool) {
+	required := valset.TotalPower(ctx).Mul(diffreq)
 	available := sdk.ZeroDec()
 
-	nowset.IterateBondedValidatorsByPower(ctx, func(_ int64, v Validator) (stop bool) {
-		available = available.Add(prevset.ValidatorByConsAddr(ctx, v.GetConsAddr()).GetPower())
+	valset.valset.IterateBondedValidatorsByPower(ctx, func(_ int64, v Validator) (stop bool) {
+		available = available.Add(valset.ValidatorByConsAddr(ctx, v.GetConsAddr()).GetPower())
 		if available.GTE(required) {
 			stop = true
 			res = true

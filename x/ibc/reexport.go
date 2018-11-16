@@ -14,8 +14,8 @@ type (
 	MsgOpenConnection = connection.MsgOpenConnection
 )
 
-func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) (k Keeper) {
-	return connection.NewKeeper(cdc, key)
+func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset connection.ValidatorSet) (k Keeper) {
+	return connection.NewKeeper(cdc, key, valset)
 }
 
 func NewHandler(k Keeper) sdk.Handler {

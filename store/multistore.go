@@ -20,8 +20,9 @@ var _ sdk.KVStore = (*MultiStore)(nil) // TODO: change to multistore
 
 func NewMultiStore(key sdk.StoreKey) *MultiStore {
 	return &MultiStore{
-		key:      key,
-		prefixes: make(map[sdk.StoreKey][]byte),
+		key:        key,
+		prefixes:   make(map[sdk.StoreKey][]byte),
+		keysByName: make(map[string]sdk.StoreKey),
 	}
 }
 

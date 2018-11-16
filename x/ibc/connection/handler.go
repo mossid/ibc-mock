@@ -4,6 +4,8 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/mossid/ibc-mock/x/ibc/types"
 )
 
 func NewHandler(k Keeper) sdk.Handler {
@@ -20,7 +22,7 @@ func NewHandler(k Keeper) sdk.Handler {
 func handleMsgOpenConnection(ctx sdk.Context, k Keeper, msg MsgOpenConnection) sdk.Result {
 	id := msg.Config.UniqueID(msg.UserChainID)
 	if k.existsChain(ctx, id) {
-		return sdk.Result{} // TODO: error
+		return types.ErrConnectionAlreadyOpened(types.DefaultCodespace).Result()
 	}
 	k.registerChain(ctx, id, msg.Config)
 
@@ -33,8 +35,8 @@ var (
 )
 
 func BeginBlocker(ctx sdk.Context, k Keeper, header abci.Header) {
-	if header.Height == 1 || !IsContinuous(ctx, k.checkpointer.lastvalset, k.valset, DIFFREQ) {
-		k.checkpointer.lastvalset.Snapshot(ctx, k.valset)
+	if header.Height == 1 || !k.checkpointer.lastvalset.IsStillValid(ctx, DIFFREQ) {
+		k.checkpointer.lastvalset.Snapshot(ctx)
 		k.checkpointer.checkpoints.Set(ctx, uint64(header.Height), header)
 	}
 }
