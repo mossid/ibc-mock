@@ -1,14 +1,17 @@
 package store
 
 import (
+	"reflect"
+
 	"github.com/tendermint/go-amino"
 
 	"github.com/cosmos/cosmos-sdk/store"
 )
 
 type Mapping struct {
-	base   Base
-	prefix []byte
+	base       Base
+	prefix     []byte
+	start, end []byte
 }
 
 func NewMapping(base Base, prefix []byte) Mapping {
@@ -34,13 +37,18 @@ func NewPrefix(space byte, prefixes ...[]byte) (res []byte) {
 	return
 }
 
+func (m Mapping) store(ctx Context) KVStore {
+	if len(m.prefix) != 0 {
+		return NewPrefixStore(m.base.store(ctx), m.prefix)
+	}
+	return m.base.store(ctx)
+}
+
 func (m Mapping) Value(key []byte) Value {
 	return NewValue(
 		NewBaseWithAccessor(
-			m.base.Codec,
-			func(ctx Context) KVStore {
-				return NewPrefixStore(m.base.store(ctx), m.prefix)
-			},
+			m.base.cdc,
+			m.store,
 		),
 		key,
 	)
@@ -52,6 +60,10 @@ func (m Mapping) Get(ctx Context, key []byte, ptr interface{}) {
 
 func (m Mapping) GetIfExists(ctx Context, key []byte, ptr interface{}) {
 	m.Value(key).GetIfExists(ctx, ptr)
+}
+
+func (m Mapping) GetSafe(ctx Context, key []byte, ptr interface{}) *GetSafeError {
+	return m.Value(key).GetSafe(ctx, ptr)
 }
 
 func (m Mapping) Set(ctx Context, key []byte, o interface{}) {
@@ -79,16 +91,40 @@ func (m Mapping) Prefix(prefix []byte) Mapping {
 	)
 }
 
+func (m Mapping) Range(start, end []byte) Mapping {
+	return Mapping{
+		base:  m.base,
+		start: start,
+		end:   end,
+	}
+}
+
+// go-amino does not support decoding to a non-nil interface
+func setnil(ptr interface{}) {
+	v := reflect.ValueOf(ptr)
+	v.Elem().Set(reflect.Zero(v.Elem().Type()))
+}
+
 func (m Mapping) Iterate(ctx Context, ptr interface{}, fn func([]byte) bool) {
-	iter := m.base.store(ctx).Iterator(nil, nil)
+	iter := m.store(ctx).Iterator(m.start, m.end)
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
+		setnil(ptr)
+
 		v := iter.Value()
 
-		if ptr != nil {
-			m.base.MustUnmarshalBinaryBare(v, ptr)
-		}
+		m.base.cdc.MustUnmarshalBinaryBare(v, ptr)
 
+		if fn(iter.Key()) {
+			break
+		}
+	}
+}
+
+func (m Mapping) IterateKeys(ctx Context, fn func([]byte) bool) {
+	iter := m.store(ctx).Iterator(m.start, m.end)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
 		if fn(iter.Key()) {
 			break
 		}
@@ -96,14 +132,14 @@ func (m Mapping) Iterate(ctx Context, ptr interface{}, fn func([]byte) bool) {
 }
 
 func (m Mapping) ReverseIterate(ctx Context, ptr interface{}, fn func([]byte) bool) {
-	iter := m.base.store(ctx).ReverseIterator(nil, nil)
+	iter := m.store(ctx).ReverseIterator(m.start, m.end)
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
+		setnil(ptr)
+
 		v := iter.Value()
 
-		if ptr != nil {
-			m.base.MustUnmarshalBinaryBare(v, ptr)
-		}
+		m.base.cdc.MustUnmarshalBinaryBare(v, ptr)
 
 		if fn(iter.Key()) {
 			break
@@ -111,36 +147,47 @@ func (m Mapping) ReverseIterate(ctx Context, ptr interface{}, fn func([]byte) bo
 	}
 }
 
+func (m Mapping) ReverseIterateKeys(ctx Context, fn func([]byte) bool) {
+	iter := m.store(ctx).ReverseIterator(m.start, m.end)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		if fn(iter.Key()) {
+			break
+		}
+	}
+}
 func (m Mapping) First(ctx Context, ptr interface{}) (key []byte, ok bool) {
-	kvp, ok := store.First(m.base.store(ctx), nil, nil)
+	kvp, ok := store.First(m.base.store(ctx), m.start, m.end)
 	if !ok {
 		return
 	}
 	key = kvp.Key
 	if ptr != nil {
-		m.base.MustUnmarshalBinaryBare(kvp.Value, ptr)
+		m.base.cdc.MustUnmarshalBinaryBare(kvp.Value, ptr)
 	}
 	return
 }
 
 func (m Mapping) Last(ctx Context, ptr interface{}) (key []byte, ok bool) {
-	kvp, ok := store.Last(m.base.store(ctx), nil, nil)
+	kvp, ok := store.Last(m.base.store(ctx), m.start, m.end)
 	if !ok {
 		return
 	}
 	key = kvp.Key
 	if ptr != nil {
-		m.base.MustUnmarshalBinaryBare(kvp.Value, ptr)
+		m.base.cdc.MustUnmarshalBinaryBare(kvp.Value, ptr)
 	}
 	return
 }
 
 func (m Mapping) Clear(ctx Context) {
 	var keys [][]byte
-	m.Iterate(ctx, nil, func(key []byte) (stop bool) {
-		keys = append(keys, key)
-		return
-	})
+
+	iter := m.base.store(ctx).ReverseIterator(m.start, m.end)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		keys = append(keys, iter.Key())
+	}
 
 	store := m.base.store(ctx)
 	for _, key := range keys {

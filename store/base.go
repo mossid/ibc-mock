@@ -6,20 +6,20 @@ import (
 )
 
 type Base struct {
-	*codec.Codec
+	cdc   *codec.Codec
 	store func(Context) KVStore
 }
 
 func NewBase(cdc *codec.Codec, key sdk.StoreKey) Base {
 	return Base{
-		Codec: cdc,
+		cdc:   cdc,
 		store: func(ctx Context) KVStore { return ctx.KVStore(key) },
 	}
 }
 
 func NewBaseWithAccessor(cdc *codec.Codec, store func(Context) KVStore) Base {
 	return Base{
-		Codec: cdc,
+		cdc:   cdc,
 		store: store,
 	}
 }

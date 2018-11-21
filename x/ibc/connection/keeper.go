@@ -15,6 +15,7 @@ type remote struct {
 	config  store.Mapping // chainID []byte -> ChainConfig
 	height  store.Mapping // chainID []byte -> int64
 	commits store.Indexer // (chainID []byte prefix) -> height int64 -> lite.FullCommit
+	valsets store.Indexer // (chainID []byte prefix) -> height int64 -> tmtypes.ValidatorSet
 }
 
 type checkpointer struct {
@@ -54,6 +55,7 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset ValidatorSet) (k Keepe
 			config:  store.NewMapping(base, []byte{0x00}),
 			height:  store.NewMapping(base, []byte{0x01}),
 			commits: store.NewIndexer(base, []byte{0x02}, store.BinIndexerEnc),
+			valsets: store.NewIndexer(base, []byte{0x03}, store.BinIndexerEnc),
 		},
 		local: local{
 			config: store.NewValue(base, []byte{0x20}),

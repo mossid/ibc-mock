@@ -56,24 +56,32 @@ func DecodeIndex(bz []byte, enc IndexEncoding) (res uint64, err error) {
 	}
 }
 
+func (ix Indexer) Value(index uint64) Value {
+	return ix.m.Value(EncodeIndex(index, ix.enc))
+}
+
 func (ix Indexer) Get(ctx Context, index uint64, ptr interface{}) {
-	ix.m.Get(ctx, EncodeIndex(index, ix.enc), ptr)
+	ix.Value(index).Get(ctx, ptr)
 }
 
 func (ix Indexer) GetIfExists(ctx Context, index uint64, ptr interface{}) {
-	ix.m.GetIfExists(ctx, EncodeIndex(index, ix.enc), ptr)
+	ix.Value(index).GetIfExists(ctx, ptr)
+}
+
+func (ix Indexer) GetSafe(ctx Context, index uint64, ptr interface{}) error {
+	return ix.Value(index).GetSafe(ctx, ptr)
 }
 
 func (ix Indexer) Set(ctx Context, index uint64, o interface{}) {
-	ix.m.Set(ctx, EncodeIndex(index, ix.enc), o)
+	ix.Value(index).Set(ctx, o)
 }
 
 func (ix Indexer) Has(ctx Context, index uint64) bool {
-	return ix.m.Has(ctx, EncodeIndex(index, ix.enc))
+	return ix.Value(index).Exists(ctx)
 }
 
 func (ix Indexer) Delete(ctx Context, index uint64) {
-	ix.m.Delete(ctx, EncodeIndex(index, ix.enc))
+	ix.Value(index).Delete(ctx)
 }
 
 func (ix Indexer) IsEmpty(ctx Context) bool {
@@ -88,8 +96,26 @@ func (ix Indexer) Prefix(prefix []byte) Indexer {
 	}
 }
 
-func (ix Indexer) Iterate(ctx Context, ptr interface{}, fn func(uint64) bool) {
+func (ix Indexer) Range(start, end uint64) Indexer {
+	return Indexer{
+		m: ix.m.Range(EncodeIndex(start, ix.enc), EncodeIndex(end, ix.enc)),
+
+		enc: ix.enc,
+	}
+}
+
+func (ix Indexer) IterateAscending(ctx Context, ptr interface{}, fn func(uint64) bool) {
 	ix.m.Iterate(ctx, ptr, func(bz []byte) bool {
+		key, err := DecodeIndex(bz, ix.enc)
+		if err != nil {
+			panic(err)
+		}
+		return fn(key)
+	})
+}
+
+func (ix Indexer) IterateDescending(ctx Context, ptr interface{}, fn func(uint64) bool) {
+	ix.m.ReverseIterate(ctx, ptr, func(bz []byte) bool {
 		key, err := DecodeIndex(bz, ix.enc)
 		if err != nil {
 			panic(err)

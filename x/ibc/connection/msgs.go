@@ -6,6 +6,32 @@ import (
 	"github.com/mossid/ibc-mock/x/ibc/types"
 )
 
+type MsgCheckpoint struct {
+	Signer sdk.AccAddress `json:"signer"`
+}
+
+var _ sdk.Msg = MsgCheckpoint{}
+
+func (MsgCheckpoint) Route() string {
+	return "ibc"
+}
+
+func (MsgCheckpoint) Type() string {
+	return "checkpoint"
+}
+
+func (msg MsgCheckpoint) ValidateBasic() sdk.Error {
+	return nil // TODO
+}
+
+func (msg MsgCheckpoint) GetSignBytes() []byte {
+	return cdc.MustMarshalJSON(msg) // TODO
+}
+
+func (msg MsgCheckpoint) GetSigners() []sdk.AccAddress {
+	return []sdk.AccAddress{msg.Signer}
+}
+
 type MsgOpenConnection struct {
 	UserChainID string                 `json:"user-chain-id"`
 	Config      types.ConnectionConfig `json:"config"`

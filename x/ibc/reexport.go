@@ -12,6 +12,7 @@ type (
 	Keeper = connection.Keeper
 
 	MsgOpenConnection = connection.MsgOpenConnection
+	MsgCheckpoint     = connection.MsgCheckpoint
 )
 
 func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset connection.ValidatorSet) (k Keeper) {

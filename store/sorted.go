@@ -18,24 +18,28 @@ func (s Sorted) key(power uint64, key []byte) []byte {
 	return append(EncodeIndex(power, s.enc), key...)
 }
 
+func (s Sorted) Value(power uint64, key []byte) Value {
+	return s.m.Value(s.key(power, key))
+}
+
 func (s Sorted) Get(ctx Context, power uint64, key []byte, ptr interface{}) {
-	s.m.Get(ctx, s.key(power, key), ptr)
+	s.Value(power, key).Get(ctx, ptr)
 }
 
 func (s Sorted) GetIfExists(ctx Context, power uint64, key []byte, ptr interface{}) {
-	s.m.GetIfExists(ctx, s.key(power, key), ptr)
+	s.Value(power, key).GetIfExists(ctx, ptr)
 }
 
 func (s Sorted) Set(ctx Context, power uint64, key []byte, o interface{}) {
-	s.m.Set(ctx, s.key(power, key), o)
+	s.Value(power, key).Set(ctx, o)
 }
 
 func (s Sorted) Has(ctx Context, power uint64, key []byte) bool {
-	return s.m.Has(ctx, s.key(power, key))
+	return s.Value(power, key).Exists(ctx)
 }
 
 func (s Sorted) Delete(ctx Context, power uint64, key []byte) {
-	s.m.Delete(ctx, s.key(power, key))
+	s.Value(power, key).Delete(ctx)
 }
 
 func (s Sorted) IsEmpty(ctx Context) bool {
