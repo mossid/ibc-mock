@@ -80,9 +80,9 @@ type Proof struct {
 type EncodingScheme byte
 
 const (
-	Amino EncodingScheme = iota
-	JSON
-	ABI
+	EncodingAmino EncodingScheme = iota
+	EncodingJSON
+	EncodingABI
 )
 
 type ConnectionConfig struct {

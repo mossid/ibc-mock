@@ -20,7 +20,8 @@ func (k Keeper) ChannelCore(name string, ty types.ChannelType) ch.ChannelCore {
 		k.cdc,
 		func(ctx sdk.Context) sdk.KVStore {
 			// TODO: change to ctx.MultiStore()
-			return ctx.KVStore(k.key).(*store.MultiStore).GetKVStore(key)(ctx)
+			// return ctx.KVStore(k.key).(*store.MultiStore).GetKVStore(key)(ctx)
+			return store.NewPrefixStore(ctx.KVStore(k.key), []byte(key.Name()))
 		},
 	)
 

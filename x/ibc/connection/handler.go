@@ -20,8 +20,7 @@ func NewHandler(k Keeper) sdk.Handler {
 }
 
 func handleMsgCheckpoint(ctx sdk.Context, k Keeper, msg MsgCheckpoint) sdk.Result {
-	k.checkpointer.lastvalset.Snapshot(ctx)
-	k.checkpointer.checkpoints.Set(ctx, uint64(ctx.BlockHeight()), ctx.BlockHeader())
+	k.local.checkpoints.Set(ctx, uint64(ctx.BlockHeight()), ctx.BlockHeader())
 	return sdk.Result{}
 }
 

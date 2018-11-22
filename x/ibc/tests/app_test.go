@@ -1,7 +1,7 @@
 package ibc
 
 import (
-	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,16 +13,18 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/mock"
+
+	"github.com/mossid/ibc-mock/x/ibc"
 )
 
 func registerCodec(cdc *codec.Codec) {
-	RegisterCodec(cdc)
+	ibc.RegisterCodec(cdc)
 	cdc.RegisterInterface((*tmtypes.PrivValidator)(nil), nil)
 	cdc.RegisterConcrete(mockPV{}, "test/mockPV", nil)
 	cdc.RegisterConcrete(MockValidator{}, "test/MockValidator", nil)
 }
 
-func getMockApp(t *testing.T) (*mock.App, Keeper, MockValidatorSet, []MockValidator) {
+func getMockApp(t *testing.T) (*mock.App, ibc.Keeper, MockValidatorSet, []MockValidator) {
 	mApp := mock.NewApp()
 
 	registerCodec(mApp.Cdc)
@@ -31,10 +33,10 @@ func getMockApp(t *testing.T) (*mock.App, Keeper, MockValidatorSet, []MockValida
 	valsetkey := sdk.NewKVStoreKey("valset")
 	vals := getValidators()
 	valset := NewMockValidatorSet(mApp.Cdc, valsetkey)
-	keeper := NewKeeper(mApp.Cdc, key, valset)
+	keeper := ibc.NewKeeper(mApp.Cdc, key, valset)
 
-	mApp.Router().AddRoute("ibc", NewHandler(keeper))
-	mApp.SetInitChainer(getInitChainer(mApp, keeper, valset, vals))
+	mApp.Router().AddRoute("ibc", ibc.NewHandler(keeper))
+	mApp.SetInitChainer(getInitChainer(keeper, valset, vals))
 	mApp.SetAnteHandler(nil) // overriding antehandler to bypass auth logic
 	mApp.SetBeginBlocker(nil)
 	mApp.SetEndBlocker(nil)
@@ -44,9 +46,8 @@ func getMockApp(t *testing.T) (*mock.App, Keeper, MockValidatorSet, []MockValida
 	return mApp, keeper, valset, vals
 }
 
-func getInitChainer(mapp *mock.App, k Keeper, valset MockValidatorSet, vals []MockValidator) sdk.InitChainer {
+func getInitChainer(k ibc.Keeper, valset MockValidatorSet, vals []MockValidator) sdk.InitChainer {
 	return func(ctx sdk.Context, req abci.RequestInitChain) (res abci.ResponseInitChain) {
-		fmt.Println(vals)
 		valsetInitGenesis(ctx, valset, vals)
 
 		res.Validators = make([]abci.ValidatorUpdate, len(vals))
@@ -65,15 +66,17 @@ const valsetnum = 10
 func getValidators() []MockValidator {
 	vals := make([]MockValidator, valsetnum)
 	for i := range vals {
-		vals[i] = MockValidator{newMockPV(), sdk.NewDec(int64(i))}
+		vals[i] = MockValidator{newMockPV(), sdk.NewDec(int64(i + 1))}
 	}
+
+	sort.Sort(MockValidators(vals))
 
 	return vals
 }
 
 type node struct {
 	*mock.App
-	k      Keeper
+	k      ibc.Keeper
 	valset MockValidatorSet
 
 	vals    []MockValidator
@@ -84,10 +87,10 @@ type node struct {
 	lastheader abci.Header
 }
 
-func getNode(t *testing.T) node {
+func getNode(t *testing.T) *node {
 	app, k, valset, vals := getMockApp(t)
 
-	return node{
+	return &node{
 		App:     app,
 		k:       k,
 		valset:  valset,
@@ -98,8 +101,9 @@ func getNode(t *testing.T) node {
 
 func (node *node) simulateSigning() {
 	tmheader := tmtypes.Header{
-		Height:  node.lastheader.Height,
-		AppHash: node.lastheader.AppHash,
+		Height:         node.lastheader.Height,
+		AppHash:        node.lastheader.AppHash,
+		ValidatorsHash: node.tmvalset().Hash(),
 	}
 
 	precommits := node.sign(tmheader)
@@ -107,6 +111,9 @@ func (node *node) simulateSigning() {
 	shdr := tmtypes.SignedHeader{
 		Header: &tmheader,
 		Commit: &tmtypes.Commit{
+			BlockID: tmtypes.BlockID{
+				Hash: tmheader.Hash(),
+			},
 			Precommits: precommits,
 		},
 	}
@@ -160,9 +167,7 @@ func (node *node) tmvalset() *tmtypes.ValidatorSet {
 		}
 	}
 
-	return &tmtypes.ValidatorSet{
-		Validators: vals,
-	}
+	return tmtypes.NewValidatorSet(vals)
 }
 
 func (node *node) sign(header tmtypes.Header) []*tmtypes.Vote {
@@ -186,11 +191,23 @@ func (node *node) startChain(t *testing.T) {
 	node.InitChain(abci.RequestInitChain{})
 }
 
-func (node *node) openConnection(t *testing.T, target *node) {
-	// send MsgOpenConnection
+func (node *node) checkpoint(t *testing.T) sdk.Result {
+	return node.signCheckDeliver(t, ibc.MsgCheckpoint{}, true, true)
 }
 
-func (node *node) establishConnection(t *testing.T) {
+func (node *node) openConnection(t *testing.T, target *node) sdk.Result {
+	// send MsgOpenConnection
+	msg := ibc.MsgOpenConnection{
+		UserChainID: "testchain",
+		Config: ibc.ConnectionConfig{
+			ROT:      target.commits[target.height],
+			Encoding: ibc.EncodingAmino,
+		},
+	}
+	return node.signCheckDeliver(t, msg, true, true)
+}
+
+func (node *node) establishConnection(t *testing.T, target *node) {
 	// relay PayloadConnectionListening
 }
 
@@ -214,22 +231,23 @@ func TestNode(t *testing.T) {
 	node := getNode(t)
 	node.startChain(t)
 
-	for i := 0; i < 10; i++ {
-		node.signCheckDeliver(t, MsgCheckpoint{}, true, true)
-	}
-}
-
-func TestSimulateSigning(t *testing.T) {
-	node := getNode(t)
-	node.startChain(t)
-
 	verifier := lite.NewBaseVerifier("", 0, node.tmvalset())
 
 	for i := 0; i < 10; i++ {
-		node.signCheckDeliver(t, MsgCheckpoint{}, true, true)
+		node.checkpoint(t)
 		err := verifier.Verify(node.commits[int64(i)+1].SignedHeader)
 		require.NoError(t, err)
 	}
+}
+
+func TestBasicConnection(t *testing.T) {
+	node1, node2 := getNode(t), getNode(t)
+	node1.checkpoint(t)
+	node2.checkpoint(t)
+	node1.openConnection(t, node2)
+	node2.openConnection(t, node1)
+	node1.establishConnection(t, node2)
+	node2.establishConnection(t, node1)
 }
 
 /*

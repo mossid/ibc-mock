@@ -6,6 +6,7 @@ import (
 
 	"github.com/mossid/ibc-mock/x/ibc/channel"
 	"github.com/mossid/ibc-mock/x/ibc/connection"
+	"github.com/mossid/ibc-mock/x/ibc/types"
 )
 
 type (
@@ -25,4 +26,12 @@ func NewHandler(k Keeper) sdk.Handler {
 
 type (
 	ChannelCore = channel.ChannelCore
+)
+
+type (
+	ConnectionConfig = types.ConnectionConfig
+)
+
+const (
+	EncodingAmino = types.EncodingAmino
 )

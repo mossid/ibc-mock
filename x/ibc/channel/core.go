@@ -95,7 +95,8 @@ func (tem ChannelTemplate) ChannelCore(id []byte) ChannelCore {
 		tem.cdc,
 		func(ctx sdk.Context) sdk.KVStore {
 			return store.NewPrefixStore(
-				ctx.KVStore(tem.rkey).(*store.MultiStore).GetKVStore(tem.key)(ctx), // TODO: change to multistore
+				store.NewPrefixStore(ctx.KVStore(tem.rkey), []byte(tem.key.Name())),
+				//				ctx.KVStore(tem.rkey).(*store.MultiStore).GetKVStore(tem.key)(ctx), // TODO: change to multistore
 				amino.MustMarshalBinaryLengthPrefixed(id),
 			)
 		},

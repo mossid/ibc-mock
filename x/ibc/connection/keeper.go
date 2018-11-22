@@ -18,13 +18,9 @@ type remote struct {
 	valsets store.Indexer // (chainID []byte prefix) -> height int64 -> tmtypes.ValidatorSet
 }
 
-type checkpointer struct {
-	lastvalset  SnapshotValidatorSet
-	checkpoints store.Indexer // height uint64 -> Header
-}
-
 type local struct {
-	config store.Value // ChainConfig
+	checkpoints store.Indexer // height uint64 -> Header
+	config      store.Value   // ChainConfig
 }
 
 type Keeper struct {
@@ -33,9 +29,8 @@ type Keeper struct {
 	key sdk.StoreKey
 
 	// storage accessor
-	remote       remote
-	local        local
-	checkpointer checkpointer
+	remote remote
+	local  local
 
 	// local multistore
 	chstore *store.MultiStore
@@ -58,17 +53,10 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset ValidatorSet) (k Keepe
 			valsets: store.NewIndexer(base, []byte{0x03}, store.BinIndexerEnc),
 		},
 		local: local{
-			config: store.NewValue(base, []byte{0x20}),
+			checkpoints: store.NewIndexer(base, []byte{0x20}, store.BinIndexerEnc),
+			config:      store.NewValue(base, []byte{0x21}),
 		},
-		checkpointer: checkpointer{
-			lastvalset: SnapshotValidatorSet{
-				byconsaddr: store.NewMapping(base, []byte{0x30}),
-				bypower:    store.NewSorted(base, []byte{0x31}, store.BinIndexerEnc),
-				totalpower: store.NewValue(base, []byte{0x32}),
-				valset:     valset,
-			},
-			checkpoints: store.NewIndexer(base, []byte{0x33}, store.BinIndexerEnc),
-		},
+
 		// Implementing as store.MultiStore(which is just a prefixstore) for now
 		// TODO: change it to rootmultistore
 		chstore: store.NewMultiStore(key),

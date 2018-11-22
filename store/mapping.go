@@ -169,7 +169,8 @@ func (m Mapping) First(ctx Context, ptr interface{}) (key []byte, ok bool) {
 }
 
 func (m Mapping) Last(ctx Context, ptr interface{}) (key []byte, ok bool) {
-	kvp, ok := store.Last(m.base.store(ctx), m.start, m.end)
+
+	kvp, ok := last(m.base.store(ctx), m.start, m.end)
 	if !ok {
 		return
 	}
