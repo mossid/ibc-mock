@@ -151,3 +151,7 @@ func (ix Indexer) Last(ctx Context, ptr interface{}) (key uint64, ok bool) {
 	}
 	return
 }
+
+func (ix Indexer) Key(index uint64) []byte {
+	return ix.m.Key(EncodeIndex(index, ix.enc))
+}

@@ -44,14 +44,19 @@ func (m Mapping) store(ctx Context) KVStore {
 	return m.base.store(ctx)
 }
 
+/*
+func (m Mapping) keyPath() (res KeyPath) {
+	if len(m.prefix) != 0 {
+		return m.base.Prefix(m.prefix).KeyPath()
+	}
+	return m.base.KeyPath()
+}
+*/
 func (m Mapping) Value(key []byte) Value {
-	return NewValue(
-		NewBaseWithAccessor(
-			m.base.cdc,
-			m.store,
-		),
-		key,
-	)
+	if len(m.prefix) != 0 {
+		return NewValue(m.base, append(m.prefix, key...))
+	}
+	return NewValue(m.base, key)
 }
 
 func (m Mapping) Get(ctx Context, key []byte, ptr interface{}) {
@@ -194,4 +199,8 @@ func (m Mapping) Clear(ctx Context) {
 	for _, key := range keys {
 		store.Delete(key)
 	}
+}
+
+func (m Mapping) Key(key []byte) []byte {
+	return m.Value(key).Key()
 }

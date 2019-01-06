@@ -15,7 +15,7 @@ type MsgReceive struct {
 var _ sdk.Msg = MsgReceive{}
 
 func (msg MsgReceive) Route() string {
-	return msg.Packets[0].Route()
+	return msg.Packets[0].Payload.Route()
 }
 
 func (msg MsgReceive) Type() string {
@@ -36,10 +36,10 @@ func (msg MsgReceive) ValidateBasic() sdk.Error {
 	}
 
 	p0 := msg.Packets[0]
-	route0, ty0, qid0 := p0.Route(), p0.Type(), p0.QueueID()
+	route0, ty0, qid0 := p0.Payload.Route(), p0.Type(), p0.QueueID()
 
 	for _, p := range msg.Packets[1:] {
-		if p.Route() != route0 {
+		if p.Payload.Route() != route0 {
 			return ErrUnmatchingPacket(DefaultCodespace, "invalid route")
 		}
 		if p.Type() != ty0 {
@@ -54,7 +54,8 @@ func (msg MsgReceive) ValidateBasic() sdk.Error {
 }
 
 type PayloadChannelListening struct {
-	Info types.ChannelInfo
+	Info      types.ChannelInfo
+	ChannelID []byte
 }
 
 var _ types.Payload = PayloadChannelListening{}

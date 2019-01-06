@@ -14,6 +14,11 @@ type (
 
 	MsgOpenConnection = connection.MsgOpenConnection
 	MsgCheckpoint     = connection.MsgCheckpoint
+
+	MsgReceive = channel.MsgReceive
+
+	PayloadConnectionListening = channel.PayloadConnectionListening
+	PayloadChannelListening    = channel.PayloadChannelListening
 )
 
 func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, valset connection.ValidatorSet) (k Keeper) {
@@ -29,6 +34,8 @@ type (
 )
 
 type (
+	Header           = types.Header
+	Packet           = types.Packet
 	ConnectionConfig = types.ConnectionConfig
 )
 

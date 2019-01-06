@@ -12,7 +12,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/mossid/ibc-mock/store"
-	"github.com/mossid/ibc-mock/x/ibc/connection"
 )
 
 // reimplementing tmtypes.MockPV to make it marshallable
@@ -61,7 +60,7 @@ func NewMockValidator() MockValidator {
 	}
 }
 
-var _ connection.Validator = MockValidator{}
+//var _ connection.Validator = MockValidator{}
 
 func (val MockValidator) GetOperator() sdk.ValAddress {
 	return sdk.ValAddress(val.MockPV.GetAddress())
@@ -128,29 +127,4 @@ func valsetInitGenesis(ctx sdk.Context, valset MockValidatorSet, vals []MockVali
 	}
 
 	valset.power.Set(ctx, Power)
-}
-
-var _ connection.ValidatorSet = MockValidatorSet{}
-
-func (valset MockValidatorSet) IterateBondedValidatorsByPower(ctx sdk.Context, fn func(int64, connection.Validator) bool) {
-	var addr sdk.ConsAddress
-	var index int64
-
-	valset.byPower.IterateDescending(ctx, &addr, func(key []byte) (stop bool) {
-		var val MockValidator
-		valset.validators.Get(ctx, addr, &val)
-		stop = fn(index, val)
-		index++
-		return
-	})
-}
-
-func (valset MockValidatorSet) TotalPower(ctx sdk.Context) (res sdk.Dec) {
-	valset.power.Get(ctx, &res)
-	return
-}
-
-func (valset MockValidatorSet) ValidatorByConsAddr(ctx sdk.Context, addr sdk.ConsAddress) (res connection.Validator) {
-	valset.validators.Get(ctx, addr, &res)
-	return
 }

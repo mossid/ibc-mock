@@ -45,13 +45,14 @@ A connection can be opened permissionlessly by sending `MsgOpenConnection`.
 ```go
 type MsgOpenConnection struct {
     ROT/*SYN*/ lite.FullCommit
+    PerConnPath string
     Signer sdk.AccAddress
 }
 ```
 
 After the `MsgOpenConnection` is executed, the chain is ready to receive the messages.
 
-`ROT` stands for "Root of Trust", where the sequence of valset update begins. It is recommended to use the genesis block of the chain, but it is possible to use different block. To achieve this, IBC module tracks the valset of its chain, and checkpoints the header when there is `+1/3` valset change. These checkpoints, including the genesis, works as valid `ROT` that other chains who wants to receive messages from the chain can use.
+`ROT` stands for "Root of Trust", where the sequence of valset update begins. It is recommended to use the genesis block of the chain, but it is possible to use different block. Anybody can send `MsgCheckpoint` to the IBC module, checkpointing the header of that block. These checkpoints, including the genesis, works as valid `ROT` that other chains who wants to receive messages from the chain can use.
 
 `Signer` is the address sent this message, paying fee for it.
 
@@ -204,7 +205,7 @@ func (ch ChannelCore) Open(ctx sdk.Context, chainid string) bool {
 
 // 2. The payload is sent through IBC channel
 // It stores the decoded information to the state
-type PayloadChannelOpen struct {
+type PayloadChannelListening struct {
     info []byte
 }
 
@@ -235,7 +236,7 @@ func (ch ChannelCore) Queue(ctx sdk.Context, chainid string, queueid []byte) (q 
 
 ```
 
-Opening a channel works similar with opening a connection, except it is 2-way handshake, since we assume(and check) that there is already a connection between two chains. Each channel have their own channel format, which has to be symmetrical between a pair of channels. To make it sure that two channel has a same `ChannelInfo`, it is included in `PayloadChannelOpen`. The queue allows
+Opening a channel works similar with opening a connection, except it is 2-way handshake, since we assume(and check) that there is already a connection between two chains. Each channel have their own channel format, which has to be symmetrical between a pair of channels. To make it sure that two channel has a same `ChannelInfo`, it is included in `PayloadChannelListening`. The queue allows
 
 `ChannelCore` and `StdChannelCore` are not intended to be used as it is, but rather in wrapped form. Since they exposes raw access to the queues, it can be potentially harmful.
 
@@ -268,27 +269,27 @@ func (ch UniChannel) queue(ctx sdk.Context, chainid string) store.Queue {
     return ch.core.Queue(ctx, chainid, Packet.Bytes())
 }
 
-// BiChannel contains Packet queue and Receipt queue,
+// StdChannel contains Packet queue and Receipt queue,
 // enabling the chains can fail on a payload
-type BiChannel struct {
+type StdChannel struct {
     core ChannelCore
 }
 
-func (ch *BiChannel) ChannelType() []byte {
+func (ch *StdChannel) ChannelType() []byte {
     return []byte{0x00, 0x01, 0x02, 0x03}
 }
 
-func (ch *BiChannel) SetChannelCore(core ChannelCore) {
+func (ch *StdChannel) SetChannelCore(core ChannelCore) {
     ch.core = core
 }
 
-func (ch BiChannel) queue(ctx sdk.Context, ty DatagramType, chainid string) store.Queue {
+func (ch StdChannel) queue(ctx sdk.Context, ty DatagramType, chainid string) store.Queue {
     return ch.core.Queue(ctx, chainid, ty.Bytes())
 }
 
 ```
 
-`{Uni, Bi}Channel` wraps `ChannelCore` and make the users to access on packet and receipt queue in rescricted way. ~~Initially, there are two queues, one for packets, and one for receipts. Outgoing Packet queue, Incoming Packet queue, Outgoing Receipt queue, Incoming Receipt Queue. `DatagramType` can be extended in a future version of the protocol.~~
+`{Uni, Std}Channel` wraps `ChannelCore` and make the users to access on packet and receipt queue in rescricted way. ~~Initially, there are two queues, one for packets, and one for receipts. Outgoing Packet queue, Incoming Packet queue, Outgoing Receipt queue, Incoming Receipt Queue. `DatagramType` can be extended in a future version of the protocol.~~
 
 ### Sending a packet
 

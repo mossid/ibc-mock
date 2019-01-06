@@ -34,8 +34,9 @@ type Channel interface {
 }
 
 type ChannelInfo struct {
-	ChannelType ChannelType
-	KeyPath     merkle.KeyPath // KeyPath to the message queue
+	ChannelType      ChannelType
+	KeyPath          merkle.KeyPath // KeyPath to the message queue
+	RequireHandshake bool
 }
 
 type ChannelInfoPair struct {
@@ -56,7 +57,8 @@ type Packet struct {
 }
 
 type Header struct {
-	//	Route [][]byte
+	Source      []byte
+	Destination []byte
 }
 
 type Payload interface {
@@ -69,6 +71,21 @@ type Payload interface {
 }
 
 type Proof struct {
+	Key   []byte
+	Value []byte
+	Proof *merkle.Proof
+}
+
+func (p Proof) Verify(prt *merkle.ProofRuntime, root []byte, keypath string) (err error) {
+	if p.Value == nil {
+		return prt.VerifyAbsence(p.Proof, root, keypath)
+	} else {
+		return prt.VerifyValue(p.Proof, root, keypath, p.Value)
+	}
+}
+
+/*
+type Proof struct {
 	Sequence uint64
 
 	Height      int64
@@ -76,7 +93,7 @@ type Proof struct {
 	ChannelName string
 	ChannelID   []byte
 }
-
+*/
 type EncodingScheme byte
 
 const (
@@ -86,8 +103,9 @@ const (
 )
 
 type ConnectionConfig struct {
-	ROT      lite.FullCommit
-	Encoding EncodingScheme
+	ROT         lite.FullCommit
+	Encoding    EncodingScheme
+	PerConnInfo ChannelInfo
 }
 
 func (config ConnectionConfig) UniqueID(userID string) []byte {
@@ -103,4 +121,8 @@ func (config ConnectionConfig) Height() uint64 {
 		panic("invalid header")
 	}
 	return uint64(height)
+}
+
+func (config ConnectionConfig) KeyPath() {
+
 }

@@ -55,6 +55,17 @@ func (v Value) Delete(ctx Context) {
 	v.store(ctx).Delete(v.key)
 }
 
+func (v Value) Key() (res []byte) {
+	res = make([]byte, len(v.key))
+	copy(res, v.key)
+	return
+}
+
+/*
+func (v Value) KeyPath() KeyPath {
+	return v.base.KeyPath().AppendKey(v.key, KeyEncodingHex)
+}
+*/
 type GetSafeErrorType byte
 
 const (

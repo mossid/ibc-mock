@@ -16,14 +16,15 @@ func (k Keeper) ChannelCore(name string, ty types.ChannelType) ch.ChannelCore {
 	key := sdk.NewKVStoreKey(name)
 	k.chstore.MountStore(key)
 
-	base := store.NewBaseWithAccessor(
-		k.cdc,
-		func(ctx sdk.Context) sdk.KVStore {
-			// TODO: change to ctx.MultiStore()
-			// return ctx.KVStore(k.key).(*store.MultiStore).GetKVStore(key)(ctx)
-			return store.NewPrefixStore(ctx.KVStore(k.key), []byte(key.Name()))
-		},
-	)
+	base := store.NewBase(k.cdc, k.key).Prefix([]byte(key.Name()))
+	/*
+			func(ctx sdk.Context) sdk.KVStore {
+				// TODO: change to ctx.MultiStore()
+				// return ctx.KVStore(k.key).(*store.MultiStore).GetKVStore(key)(ctx)
+				return store.NewPrefixStore(ctx.KVStore(k.key), []byte(key.Name()))
+			},
+		)
+	*/
 
 	return ch.NewChannelCore(base, k.perconn, name, ty)
 }

@@ -7,11 +7,13 @@ import (
 type CodeType = sdk.CodeType
 
 const (
-	DefaultCodespace sdk.CodespaceType = 100 //TODO
+	DefaultCodespace sdk.CodespaceType = "ibc"
 
 	CodeEmptyMsg                CodeType = 101
 	CodeUnmatchingPacket        CodeType = 102
 	CodeConnectionAlreadyOpened CodeType = 103
+	CodeHeaderNotCheckpointed   CodeType = 104
+	CodeConnectionNotOpened     CodeType = 105
 )
 
 func ErrEmptyMsg(codespace sdk.CodespaceType) sdk.Error {
@@ -24,4 +26,12 @@ func ErrUnmatchingPacket(codespace sdk.CodespaceType, msg string) sdk.Error {
 
 func ErrConnectionAlreadyOpened(codespace sdk.CodespaceType) sdk.Error {
 	return sdk.NewError(codespace, CodeConnectionAlreadyOpened, "")
+}
+
+func ErrHeaderNotCheckpointed(codespace sdk.CodespaceType) sdk.Error {
+	return sdk.NewError(codespace, CodeHeaderNotCheckpointed, "")
+}
+
+func ErrConnectionNotOpened(codespace sdk.CodespaceType) sdk.Error {
+	return sdk.NewError(codespace, CodeConnectionNotOpened, "")
 }

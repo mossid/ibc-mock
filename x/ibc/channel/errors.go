@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	DefaultCodespace sdk.CodespaceType = 100 //TODO
+	DefaultCodespace sdk.CodespaceType = "ibc"
 )
 
 func ErrEmptyMsg(codespace sdk.CodespaceType) sdk.Error {

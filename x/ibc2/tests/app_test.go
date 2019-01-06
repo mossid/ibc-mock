@@ -14,7 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/mock"
 
-	"github.com/mossid/ibc-mock/x/ibc"
+	"github.com/mossid/ibc-mock/x/ibc2"
 )
 
 func registerCodec(cdc *codec.Codec) {
@@ -86,7 +86,7 @@ type node struct {
 	seq        uint64
 	lastheader abci.Header
 
-	connconfig ibc.ConnectionConfig
+	connconfig ibc.ConnConfig
 }
 
 func getNode(t *testing.T) *node {

@@ -16,4 +16,6 @@ func RegisterCodec(cdc *codec.Codec) {
 	cdc.RegisterConcrete(MsgOpenConnection{}, "ibc/MsgOpenConnection", nil)
 
 	cdc.RegisterInterface((*Validator)(nil), nil)
+
+	cdc.RegisterConcrete(SimpleHeader{}, "ibc/SimpleHeader", nil)
 }

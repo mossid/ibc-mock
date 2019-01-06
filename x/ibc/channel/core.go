@@ -1,7 +1,6 @@
 package channel
 
 import (
-	"github.com/tendermint/go-amino"
 	//	"github.com/tendermint/tendermint/crypto/merkle"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -91,8 +90,8 @@ func (tem ChannelTemplate) ChannelCore(id []byte) ChannelCore {
 		panic("cannot use empty channel id")
 	}
 
-	base := store.NewBaseWithAccessor(
-		tem.cdc,
+	base := store.NewBase(tem.cdc, tem.rkey).Prefix([]byte(tem.key.Name()))
+	/*
 		func(ctx sdk.Context) sdk.KVStore {
 			return store.NewPrefixStore(
 				store.NewPrefixStore(ctx.KVStore(tem.rkey), []byte(tem.key.Name())),
@@ -100,7 +99,7 @@ func (tem ChannelTemplate) ChannelCore(id []byte) ChannelCore {
 				amino.MustMarshalBinaryLengthPrefixed(id),
 			)
 		},
-	)
+	)*/
 
 	return NewChannelCore(base, tem.perconn, tem.key.Name(), tem.ty)
 }
