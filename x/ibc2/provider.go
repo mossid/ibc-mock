@@ -5,6 +5,7 @@ import (
 
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/lite"
+	liteErr "github.com/tendermint/tendermint/lite/errors"
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -25,9 +26,11 @@ func (p provider) LatestFullCommit(chainID string, minHeight, maxHeight int64) (
 		return
 	}
 
-	_, ok := p.commits.Range(uint64(minHeight), uint64(maxHeight)).Last(p.ctx, &res)
+	// minHeight and maxHeight required to be inclusive but Range takes endpoint
+	// as exclusive
+	_, ok := p.commits.Range(uint64(minHeight), uint64(maxHeight)+1).Last(p.ctx, &res)
 	if !ok {
-		err = errors.New("error getting latest full commit")
+		err = liteErr.ErrCommitNotFound()
 	}
 	return
 }
@@ -67,6 +70,13 @@ type Source struct {
 	commits []lite.FullCommit
 }
 
+func NewSource(header *tmtypes.Header, commits []lite.FullCommit) Source {
+	return Source{
+		chainID: header.ChainID,
+		commits: commits,
+	}
+}
+
 var _ lite.Provider = Source{}
 
 func (s Source) LatestFullCommit(chainID string, minHeight, maxHeight int64) (res lite.FullCommit, err error) {
@@ -102,9 +112,14 @@ func (s Source) ValidatorSet(chainID string, height int64) (valset *tmtypes.Vali
 
 	commit, err := s.LatestFullCommit(chainID, height, height)
 	if err != nil {
+		err = liteErr.ErrUnknownValidators(chainID, height)
 		return
 	}
 
 	valset = commit.Validators
 	return
+}
+
+func (s Source) GetLastSignedHeader() tmtypes.SignedHeader {
+	return s.commits[len(s.commits)-1].SignedHeader
 }

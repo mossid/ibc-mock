@@ -3,44 +3,21 @@ package store
 import (
 	"reflect"
 
-	"github.com/tendermint/go-amino"
-
 	"github.com/cosmos/cosmos-sdk/store"
 )
 
 type Mapping struct {
 	base       Base
-	prefix     []byte
 	start, end []byte
 }
 
 func NewMapping(base Base, prefix []byte) Mapping {
 	return Mapping{
-		base:   base,
-		prefix: prefix,
+		base: base.Prefix(prefix),
 	}
-}
-
-func NewRawPrefix(space byte, prefixes ...[]byte) (res []byte) {
-	res = append(res, space)
-	for _, p := range prefixes {
-		res = append(res, p...)
-	}
-	return
-}
-
-func NewPrefix(space byte, prefixes ...[]byte) (res []byte) {
-	res = append(res, space)
-	for _, p := range prefixes {
-		res = append(res, amino.MustMarshalBinaryLengthPrefixed(p)...)
-	}
-	return
 }
 
 func (m Mapping) store(ctx Context) KVStore {
-	if len(m.prefix) != 0 {
-		return NewPrefixStore(m.base.store(ctx), m.prefix)
-	}
 	return m.base.store(ctx)
 }
 
@@ -53,9 +30,6 @@ func (m Mapping) keyPath() (res KeyPath) {
 }
 */
 func (m Mapping) Value(key []byte) Value {
-	if len(m.prefix) != 0 {
-		return NewValue(m.base, append(m.prefix, key...))
-	}
 	return NewValue(m.base, key)
 }
 
@@ -84,16 +58,13 @@ func (m Mapping) Delete(ctx Context, key []byte) {
 }
 
 func (m Mapping) IsEmpty(ctx Context) bool {
-	iter := m.base.store(ctx).Iterator(nil, nil)
+	iter := m.store(ctx).Iterator(nil, nil)
 	defer iter.Close()
 	return iter.Valid()
 }
 
 func (m Mapping) Prefix(prefix []byte) Mapping {
-	return NewMapping(
-		m.base,
-		append(m.prefix, prefix...),
-	)
+	return NewMapping(m.base, prefix)
 }
 
 func (m Mapping) Range(start, end []byte) Mapping {
@@ -162,7 +133,7 @@ func (m Mapping) ReverseIterateKeys(ctx Context, fn func([]byte) bool) {
 	}
 }
 func (m Mapping) First(ctx Context, ptr interface{}) (key []byte, ok bool) {
-	kvp, ok := store.First(m.base.store(ctx), m.start, m.end)
+	kvp, ok := store.First(m.store(ctx), m.start, m.end)
 	if !ok {
 		return
 	}
@@ -174,8 +145,7 @@ func (m Mapping) First(ctx Context, ptr interface{}) (key []byte, ok bool) {
 }
 
 func (m Mapping) Last(ctx Context, ptr interface{}) (key []byte, ok bool) {
-
-	kvp, ok := last(m.base.store(ctx), m.start, m.end)
+	kvp, ok := store.Last(m.store(ctx), m.start, m.end)
 	if !ok {
 		return
 	}
@@ -189,13 +159,13 @@ func (m Mapping) Last(ctx Context, ptr interface{}) (key []byte, ok bool) {
 func (m Mapping) Clear(ctx Context) {
 	var keys [][]byte
 
-	iter := m.base.store(ctx).ReverseIterator(m.start, m.end)
+	iter := m.store(ctx).ReverseIterator(m.start, m.end)
 	defer iter.Close()
 	for ; iter.Valid(); iter.Next() {
 		keys = append(keys, iter.Key())
 	}
 
-	store := m.base.store(ctx)
+	store := m.store(ctx)
 	for _, key := range keys {
 		store.Delete(key)
 	}

@@ -17,6 +17,8 @@ import (
 	"github.com/mossid/ibc-mock/x/ibc2"
 )
 
+const customid = "mychain"
+
 func registerCodec(cdc *codec.Codec) {
 	ibc.RegisterCodec(cdc)
 	cdc.RegisterInterface((*tmtypes.PrivValidator)(nil), nil)
@@ -33,7 +35,7 @@ func getMockApp(t *testing.T) (*mock.App, ibc.Keeper, MockValidatorSet, []MockVa
 	valsetkey := sdk.NewKVStoreKey("valset")
 	vals := getValidators()
 	valset := NewMockValidatorSet(mApp.Cdc, valsetkey)
-	keeper := ibc.NewKeeper(mApp.Cdc, key, valset)
+	keeper := ibc.NewKeeper(mApp.Cdc, key, ibc.DefaultState())
 
 	mApp.Router().AddRoute("ibc", ibc.NewHandler(keeper))
 	mApp.SetInitChainer(getInitChainer(keeper, valset, vals))
@@ -101,8 +103,8 @@ func getNode(t *testing.T) *node {
 	}
 }
 
-func (node *node) chainid() []byte {
-	return node.connconfig.UniqueID("mychain")
+func (node *node) targetchainid() []byte {
+	return node.connconfig.UniqueID(customid)
 }
 
 func (node *node) simulateSigning() {
@@ -201,20 +203,15 @@ func (node *node) startChain(t *testing.T) {
 	node.InitChain(abci.RequestInitChain{})
 }
 
-func (node *node) checkpoint(t *testing.T) sdk.Result {
-	return node.signCheckDeliver(t, ibc.MsgCheckpoint{}, true)
-}
-
-func (node *node) openConnection(t *testing.T, target *node) sdk.Result {
-	// send MsgOpenConnection
-	node.connconfig = ibc.ConnectionConfig{
-		ROT:      target.commits[1],
-		Encoding: ibc.EncodingAmino,
+func (node *node) openConn(t *testing.T, target *node) sdk.Result {
+	// send MsgOpen
+	node.connconfig = ibc.ConnConfig{
+		ROT: target.commits[1],
 	}
 
-	msg := ibc.MsgOpenConnection{
-		UserChainID: "mychain",
-		Config:      node.connconfig,
+	msg := ibc.MsgOpen{
+		CustomChainID: customid,
+		Config:        node.connconfig,
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -224,18 +221,10 @@ func (node *node) openConnection(t *testing.T, target *node) sdk.Result {
 	return res
 }
 
-func (node *node) establishConnection(t *testing.T, target *node) sdk.Result {
-	// relay PayloadConnectionListening
-	msg := ibc.MsgReceive{
-		Packets: []ibc.Packet{ibc.Packet{
-			Header: ibc.Header{
-				Route: [][]byte{node.chainid()},
-			},
-			Payload: ibc.PayloadConnectionListening{
-				Config:  target.connconfig,
-				ChainID: target.chainid(),
-			},
-		}},
+func (node *node) update(t *testing.T, target *node) sdk.Result {
+	msg := ibc.MsgUpdate{
+		ChainID: node.targetchainid(),
+		Commits: []lite.FullCommit{target.commits[target.lastheader.Height]},
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -243,6 +232,43 @@ func (node *node) establishConnection(t *testing.T, target *node) sdk.Result {
 	require.True(t, res.IsOK())
 
 	return res
+}
+
+func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
+	qres := target.Query(abci.RequestQuery{})
+
+	msg := ibc.MsgReady{
+		ChainID: node.targetchainid(),
+		Proof:   qres.Proof,
+	}
+
+	res := node.signCheckDeliver(t, msg, true)
+
+	require.True(t, res.IsOK())
+
+	// relay PayloadConnListening
+	/*
+			msg := ibc.MsgReceive{
+				Packets: []ibc.Packet{ibc.Packet{
+					Header: ibc.Header{
+						Source:      target.chainid(),
+						Destination: node.chainid(),
+					},
+					Payload: ibc.PayloadConnListening{
+						Config:  target.connconfig,
+						ChainID: target.chainid(),
+					},
+				}},
+			}
+
+
+		res := node.signCheckDeliver(t, msg, true)
+
+		require.True(t, res.IsOK())
+
+		return res
+	*/
+	return sdk.Result{}
 }
 
 func (node *node) openChannel(t *testing.T) {
@@ -257,10 +283,11 @@ func (node *node) sendPackets(t *testing.T) {
 	// send []MsgReceive, relay []MyPayload
 }
 
-func (node *node) updateConnection(t *testing.T) {
-	// send MsgUpdateConnection
+func (node *node) updateConn(t *testing.T) {
+	// send MsgUpdate
 }
 
+/*
 func TestNode(t *testing.T) {
 	node := getNode(t)
 	node.startChain(t)
@@ -268,45 +295,45 @@ func TestNode(t *testing.T) {
 	verifier := lite.NewBaseVerifier("", 0, node.tmvalset())
 
 	for i := 0; i < 10; i++ {
-		node.checkpoint(t)
+		node.execblock(t, nil)
 		err := verifier.Verify(node.commits[int64(i)+1].SignedHeader)
 		require.NoError(t, err)
 	}
 }
-
-func TestBasicConnection(t *testing.T) {
+*/
+func TestBasicConn(t *testing.T) {
 	node1, node2 := getNode(t), getNode(t)
 	node1.execblock(t, nil)
 	node2.execblock(t, nil)
-	node1.checkpoint(t)
-	node2.checkpoint(t)
-	node1.openConnection(t, node2)
-	node2.openConnection(t, node1)
-	node1.establishConnection(t, node2)
-	node2.establishConnection(t, node1)
+	node1.openConn(t, node2)
+	node2.openConn(t, node1)
+	node1.update(t, node2)
+	node2.update(t, node1)
+	node1.readyConn(t, node2)
+	node2.readyConn(t, node1)
 }
 
 /*
 func TestLifecycle(t *testing.T) {
 	node := getNode(t)
-	node.openConnection(t)
-	node.establishConnection(t)
+	node.openConn(t)
+	node.establishConn(t)
 	node.openChannel(t)
 	node.establishChannel(t)
 	node.sendPackets(t)
-	node.updateConnection(t)
+	node.updateConn(t)
 	node.sendPackets(t)
 }
 
 func TestLongDuration(t *testing.T) {
 	node := getNode(t)
-	node.openConnection(t)
-	node.establishConnection(t)
+	node.openConn(t)
+	node.establishConn(t)
 	node.openChannel(t)
 	node.establishChannel(t)
 
 	for i := 0; i < 1000; i++ {
 		node.sendPackets(t)
-		node.updateConnection(t)
+		node.updateConn(t)
 	}
 }*/

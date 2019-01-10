@@ -55,10 +55,8 @@ func (v Value) Delete(ctx Context) {
 	v.store(ctx).Delete(v.key)
 }
 
-func (v Value) Key() (res []byte) {
-	res = make([]byte, len(v.key))
-	copy(res, v.key)
-	return
+func (v Value) Key() []byte {
+	return v.base.key(v.key)
 }
 
 /*

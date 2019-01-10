@@ -8,10 +8,15 @@ import (
 
 type Status = byte
 
-func assertStatus(ctx sdk.Context, value store.Value, expected Status) bool {
+func assertStatus(ctx sdk.Context, value store.Value, expected ...Status) bool {
 	var actual Status
 	value.GetIfExists(ctx, &actual)
-	return expected == actual
+	for _, exp := range expected {
+		if exp == actual {
+			return true
+		}
+	}
+	return false
 }
 
 func transitStatus(ctx sdk.Context, value store.Value, from Status, to Status) bool {

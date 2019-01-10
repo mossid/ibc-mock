@@ -22,16 +22,16 @@ func (path keypath) _prefix(prefix []byte) (res keypath) {
 }
 */
 type Base struct {
-	cdc    *codec.Codec
-	store  func(Context) KVStore
-	prefix []byte
+	cdc     *codec.Codec
+	storefn func(Context) KVStore
+	prefix  []byte
 	//	keypath keypath // temporal
 }
 
 func NewBase(cdc *codec.Codec, key sdk.StoreKey) Base {
 	return Base{
-		cdc:   cdc,
-		store: func(ctx Context) KVStore { return ctx.KVStore(key) },
+		cdc:     cdc,
+		storefn: func(ctx Context) KVStore { return ctx.KVStore(key) },
 		/*
 		   keypath: keypath{
 		   			keypath: new(KeyPath).AppendKey([]byte(key.Name()), merkle.KeyEncodingHex),
@@ -40,10 +40,14 @@ func NewBase(cdc *codec.Codec, key sdk.StoreKey) Base {
 	}
 }
 
+func (base Base) store(ctx Context) KVStore {
+	return NewPrefixStore(base.storefn(ctx), base.prefix)
+}
+
 func (base Base) Prefix(prefix []byte) (res Base) {
 	res = Base{
-		cdc:   base.cdc,
-		store: base.store,
+		cdc:     base.cdc,
+		storefn: base.storefn,
 		//keypath: base.keypath._prefix(prefix),
 	}
 	res.prefix = join(base.prefix, prefix)
@@ -56,8 +60,8 @@ func (base Base) key(key []byte) []byte {
 
 func join(a, b []byte) (res []byte) {
 	res = make([]byte, len(a)+len(b))
-	copy(res[:len(a)], a)
-	copy(res[len(a)+1:], b)
+	copy(res, a)
+	copy(res[len(a):], b)
 	return
 }
 

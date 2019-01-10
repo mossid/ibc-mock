@@ -9,6 +9,24 @@ import (
 	"github.com/mossid/ibc-mock/store"
 )
 
+type State struct {
+	QueuePrefix      []byte
+	ConnConfigPrefix []byte
+	PortConfigPrefix []byte
+}
+
+func DefaultState() State {
+	return State{
+		QueuePrefix:      []byte{0x00},
+		ConnConfigPrefix: []byte{0x01},
+		PortConfigPrefix: []byte{0x02},
+	}
+}
+
+func (s State) Bases(base store.Base) (store.Base, store.Base, store.Base) {
+	return base.Prefix(s.QueuePrefix), base.Prefix(s.ConnConfigPrefix), base.Prefix(s.PortConfigPrefix)
+}
+
 type queue struct {
 	// state structure is enforced
 	outgoing store.Queue
@@ -50,30 +68,29 @@ type Keeper struct {
 	conn   func(ChainID) conn
 	port   func(PortID) port
 
-	// LC verification, state structure is not enforced
-	checkpoints store.Indexer // height int64 -> SimpleHeader
+	// misc
+	state State
 }
 
-func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) (k Keeper) {
+func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, state State) (k Keeper) {
 	base := store.NewBase(cdc, key)
 
 	// structure-enforced keys
-	qbase := base.Prefix([]byte{0x00}) // message
-	cbase := base.Prefix([]byte{0x01}) // chain config
-	pbase := base.Prefix([]byte{0x02}) // port config
+	enfbase := base.Prefix([]byte{0x00})
+	qbase, cbase, pbase := state.Bases(enfbase)
 
 	// structure-free keys
-	ibase := base.Prefix([]byte{0xA0})  // queue incoming sequence
-	cmbase := base.Prefix([]byte{0xA1}) // commit
-	ckbase := base.Prefix([]byte{0xA2}) // checkpoint
-	sbase := base.Prefix([]byte{0xA3})  // status
+	freebase := base.Prefix([]byte{0x01})
+	cmbase := freebase.Prefix([]byte{0x00}) // commit
+	csbase := freebase.Prefix([]byte{0x01}) // conn status
+	qsbase := freebase.Prefix([]byte{0x02}) // queue status
 
 	k = Keeper{
-		config: store.NewValue(base, []byte{}),
+		config: store.NewValue(enfbase, []byte{}),
 		conn: func(chainID ChainID) conn {
 			return conn{
 				config:      store.NewValue(cbase, chainID[:]),
-				status:      store.NewValue(sbase, chainID[:]),
+				status:      store.NewValue(csbase, chainID[:]),
 				commits:     store.NewIndexer(cmbase, chainID[:], store.BinIndexerEnc),
 				localconfig: k.config,
 				cdc:         cdc,
@@ -86,22 +103,22 @@ func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) (k Keeper) {
 					bz := bytes.Join([][]byte{chainID[:], portID[:]}, nil)
 					return queue{
 						outgoing: store.NewQueue(qbase, bz, store.BinIndexerEnc),
-						incoming: store.NewValue(ibase, bz),
-						status:   store.NewValue(sbase, bz),
+						incoming: store.NewValue(qbase, bz),
+						status:   store.NewValue(qsbase, bz),
 						conn:     k.conn(chainID),
 					}
 				},
 			}
 		},
-		checkpoints: store.NewIndexer(ckbase, []byte{}, store.BinIndexerEnc),
+		state: state,
 	}
 
 	return
 
 }
 
-func DummyKeeper() Keeper {
-	return NewKeeper(nil, nil)
+func DummyKeeper(state State) Keeper {
+	return NewKeeper(nil, nil, state)
 }
 
 /*
