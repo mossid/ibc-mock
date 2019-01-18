@@ -1,12 +1,14 @@
 package ibc
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/lite"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -35,12 +37,15 @@ func getMockApp(t *testing.T) (*mock.App, ibc.Keeper, MockValidatorSet, []MockVa
 	valsetkey := sdk.NewKVStoreKey("valset")
 	vals := getValidators()
 	valset := NewMockValidatorSet(mApp.Cdc, valsetkey)
-	keeper := ibc.NewKeeper(mApp.Cdc, key, ibc.DefaultState())
+	keeper := ibc.NewKeeper(mApp.Cdc, key)
 
 	mApp.Router().AddRoute("ibc", ibc.NewHandler(keeper))
 	mApp.SetInitChainer(getInitChainer(keeper, valset, vals))
 	mApp.SetAnteHandler(nil) // overriding antehandler to bypass auth logic
-	mApp.SetBeginBlocker(nil)
+	mApp.SetBeginBlocker(func(ctx sdk.Context, req abci.RequestBeginBlock) (res abci.ResponseBeginBlock) {
+		ibc.BeginBlock(ctx, keeper)
+		return
+	})
 	mApp.SetEndBlocker(nil)
 
 	require.NoError(t, mApp.CompleteSetup(key, valsetkey))
@@ -211,7 +216,7 @@ func (node *node) openConn(t *testing.T, target *node) sdk.Result {
 
 	msg := ibc.MsgOpen{
 		CustomChainID: customid,
-		Config:        node.connconfig,
+		ROT:           node.connconfig.ROT,
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -235,11 +240,27 @@ func (node *node) update(t *testing.T, target *node) sdk.Result {
 }
 
 func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
-	qres := target.Query(abci.RequestQuery{})
+	qres := target.Query(abci.RequestQuery{
+		Path:  "/store/ibc/key",
+		Data:  append([]byte{0x00}, target.targetchainid()...),
+		Prove: true,
+	})
+
+	fmt.Printf("id %x\nqres %x\n", target.targetchainid(), qres.Key)
+
+	require.True(t, qres.IsOK())
+
+	var connconfig ibc.ConnConfig
+	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &connconfig)
+	node.connconfig = connconfig
 
 	msg := ibc.MsgReady{
-		ChainID: node.targetchainid(),
-		Proof:   qres.Proof,
+		ChainID: target.targetchainid(),
+		RootKeyPath: new(merkle.KeyPath).
+			AppendKey([]byte("ibc"), merkle.KeyEncodingHex).
+			AppendKey([]byte{0x00}, merkle.KeyEncodingHex),
+		Proof:  qres.Proof,
+		Config: node.connconfig,
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -303,13 +324,21 @@ func TestNode(t *testing.T) {
 */
 func TestBasicConn(t *testing.T) {
 	node1, node2 := getNode(t), getNode(t)
+	fmt.Println("node1 execblock")
 	node1.execblock(t, nil)
+	fmt.Println("node2 execblock")
 	node2.execblock(t, nil)
+	fmt.Println("node1 openconn")
 	node1.openConn(t, node2)
+	fmt.Println("node2 openconn")
 	node2.openConn(t, node1)
+	fmt.Println("node1 update")
 	node1.update(t, node2)
+	fmt.Println("node2 update")
 	node2.update(t, node1)
+	fmt.Println("node1 ready")
 	node1.readyConn(t, node2)
+	fmt.Println("node2 ready")
 	node2.readyConn(t, node1)
 }
 

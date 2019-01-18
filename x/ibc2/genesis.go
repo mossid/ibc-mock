@@ -5,5 +5,5 @@ import (
 )
 
 func InitGenesis(ctx sdk.Context, k Keeper) {
-	k.config.Set(ctx, k.state)
+	//	k.config.Set(ctx, k.state)
 }

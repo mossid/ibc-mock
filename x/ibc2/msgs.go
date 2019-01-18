@@ -69,6 +69,7 @@ type MsgReady struct {
 	ChainID     ChainID
 	RootKeyPath merkle.KeyPath
 	Proof       *merkle.Proof
+	Config      ConnConfig
 	Signer      sdk.AccAddress
 }
 

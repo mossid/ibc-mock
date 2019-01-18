@@ -9,14 +9,13 @@ import (
 type ChainID = []byte
 type PortID = []byte
 
-type QueueStatus = byte
-
 const (
-	QueueIdle        QueueStatus = iota // Port is not opened
-	QueueEstablished                    // Compatability checked, ready to use
+	QueueIdle        Status = iota // Port is not opened
+	QueueEstablished               // Compatability checked, ready to use
 )
 
 type PortConfig interface {
+	RequiredStatus() Status
 	IsCompatibleWith(PortConfig) bool
 }
 

@@ -16,10 +16,14 @@ Under this subspace, actual interchain messages are stored. The messages are sto
 
 Examples: 
 ```
-0xR002: root key for the ibc module, stores local IBC configuration
+0xR002: root key for the ibc module, stores IBC config, magic number for IBC
+
 0xR002|ABCD: config key for chain ABCD, stores verified remote IBC configuration
-0xR002|ABCD|CAFEBABE: config key for queue CAFEBABE on the connection with chain ABCD, stores queue configuration
+0xR002|0000|CAFEBABE: config key for port CAFEBABE, stores port configuration
+0xR002|ABCD|CAFEBABE: stores the length of the queue, used for cleaning up on the other chain
 0xR002|ABCD|CAFEBABE|0000000000000000: first message in the queue
+
+
 ``` 
 
 The byte length of the chainID and queueID is defined in the local IBC configuration. The other chain can use this information to construct appropriate merkle keypath.

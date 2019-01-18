@@ -13,6 +13,7 @@ const (
 	CodePacketsNotUniform CodeType = 102
 	CodeConnOpenFailed    CodeType = 103
 	CodeConnUpdateFailed  CodeType = 104
+	CodeConnReadyFailed   CodeType = 105
 )
 
 func ErrEmptyMsg(codespace sdk.CodespaceType) sdk.Error {
@@ -29,4 +30,8 @@ func ErrConnOpenFailed(codespace sdk.CodespaceType) sdk.Error {
 
 func ErrConnUpdateFailed(codespace sdk.CodespaceType) sdk.Error {
 	return sdk.NewError(codespace, CodeConnUpdateFailed, "")
+}
+
+func ErrConnReadyFailed(codespace sdk.CodespaceType) sdk.Error {
+	return sdk.NewError(codespace, CodeConnReadyFailed, "")
 }

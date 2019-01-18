@@ -1,12 +1,15 @@
 package ibc
 
 import (
+	"fmt"
+
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/lite"
 	tmtypes "github.com/tendermint/tendermint/types"
 
+	"github.com/cosmos/cosmos-sdk/store"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -21,7 +24,6 @@ type ConnConfig struct {
 	ROT         lite.FullCommit // Root-of-trust fullcommit from the other chain
 	ChainID     ChainID         // ChainID of this chain registered on the other chain
 	RootKeyPath merkle.KeyPath  // Root keypath of ibc module on the other chain
-	State       State
 }
 
 func (config ConnConfig) Height() uint64 {
@@ -47,6 +49,7 @@ func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err erro
 	// TODO: optimize
 	keys, err := merkle.KeyPathToKeys(config.RootKeyPath.String())
 	if err != nil {
+		fmt.Println("ddd", err, config.RootKeyPath)
 		return
 	}
 
@@ -61,17 +64,17 @@ func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err erro
 }
 
 func (config ConnConfig) mpath(portID PortID, index uint64) (merkle.KeyPath, error) {
-	k := DummyKeeper(config.State)
+	k := DummyKeeper()
 	return config.extendKeyPath(k.port(portID).queue(config.ChainID).outgoing.Key(index))
 }
 
 func (config ConnConfig) cpath() (merkle.KeyPath, error) {
-	k := DummyKeeper(config.State)
+	k := DummyKeeper()
 	return config.extendKeyPath(k.conn(config.ChainID).config.Key())
 }
 
 func (config ConnConfig) ppath(portID PortID) (merkle.KeyPath, error) {
-	k := DummyKeeper(config.State)
+	k := DummyKeeper()
 	return config.extendKeyPath(k.port(portID).config.Key())
 }
 
@@ -108,6 +111,7 @@ func (c conn) ready(ctx sdk.Context,
 	remoteconfig ConnConfig,
 ) bool {
 	if !transitStatus(ctx, c.status, ConnOpen, ConnReady) {
+		fmt.Println("ppp11")
 		return false
 	}
 
@@ -118,14 +122,17 @@ func (c conn) ready(ctx sdk.Context,
 
 	cpath, err := config.cpath()
 	if err != nil {
+		fmt.Println("aaa11", err)
 		return false
 	}
 	bz, err := c.cdc.MarshalBinaryBare(remoteconfig)
 	if err != nil {
+		fmt.Println("bbb11", err)
 		return false
 	}
 
 	if !c.verify(ctx, cpath, proof, bz) {
+		fmt.Println("ccc11")
 		return false
 	}
 
@@ -156,11 +163,15 @@ func (c conn) latestcommit(ctx sdk.Context) (index uint64, res lite.FullCommit, 
 }
 
 func (c conn) verify(ctx sdk.Context, keypath merkle.KeyPath, proof *merkle.Proof, value []byte) bool {
+	fmt.Printf("verify, %+v, %+v, %+v\n", keypath, proof, value)
+
 	var commit lite.FullCommit
 	c.commits.Last(ctx, &commit)
 
 	prt := merkle.DefaultProofRuntime()
 	prt.RegisterOpDecoder(iavl.ProofOpIAVLValue, iavl.IAVLValueOpDecoder)
+	prt.RegisterOpDecoder(store.ProofOpMultiStore, store.MultiStoreProofOpDecoder)
 	err := prt.VerifyValue(proof, commit.SignedHeader.AppHash, keypath.String(), value)
+	fmt.Println(err)
 	return err == nil
 }
