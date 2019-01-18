@@ -14,16 +14,15 @@ import (
 )
 
 const (
-	ConnIdle        Status = iota // not opened
-	ConnOpen                      // waiting for request
-	ConnReady                     // waiting for response
-	ConnEstablished               // ready to send packets
+	ConnIdle  Status = iota // not opened
+	ConnOpen                // ready to send packets
+	ConnReady               // ready to receive packets
 )
 
 type ConnConfig struct {
 	ROT         lite.FullCommit // Root-of-trust fullcommit from the other chain
 	ChainID     ChainID         // ChainID of this chain registered on the other chain
-	RootKeyPath merkle.KeyPath  // Root keypath of ibc module on the other chain
+	RootKeyPath string          // Root keypath of ibc module on the other chain
 }
 
 func (config ConnConfig) Height() uint64 {
@@ -46,10 +45,11 @@ func (config ConnConfig) UniqueID(customID string) []byte {
 }
 
 func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err error) {
+
+	fmt.Printf("before\n%+v\n%x\n", config.RootKeyPath, key)
 	// TODO: optimize
-	keys, err := merkle.KeyPathToKeys(config.RootKeyPath.String())
+	keys, err := merkle.KeyPathToKeys(config.RootKeyPath)
 	if err != nil {
-		fmt.Println("ddd", err, config.RootKeyPath)
 		return
 	}
 
@@ -59,6 +59,8 @@ func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err erro
 	for _, key := range keys {
 		res = res.AppendKey(key, merkle.KeyEncodingHex)
 	}
+
+	fmt.Printf("after\n%+v\n", res)
 
 	return
 }
@@ -78,37 +80,47 @@ func (config ConnConfig) ppath(portID PortID) (merkle.KeyPath, error) {
 	return config.extendKeyPath(k.port(portID).config.Key())
 }
 
-func (c conn) open(ctx sdk.Context, rot lite.FullCommit) bool {
+func (c conn) open(ctx sdk.Context, rot lite.FullCommit, root string) bool {
 	if !transitStatus(ctx, c.status, ConnIdle, ConnOpen) {
 		return false
 	}
 
-	c.config.Set(ctx, ConnConfig{ROT: rot})
+	fmt.Println("vvv", root)
+	c.config.Set(ctx, ConnConfig{
+		ROT:         rot,
+		RootKeyPath: root,
+	})
 	c.commits.Set(ctx, uint64(rot.Height()), rot)
 
 	return true
 }
 
 func (c conn) update(ctx sdk.Context, source Source) bool {
-	if !assertStatus(ctx, c.status, ConnOpen, ConnReady, ConnEstablished) {
+	if !assertStatus(ctx, c.status, ConnOpen, ConnReady) {
 		return false
 	}
 
 	shdr := source.GetLastSignedHeader()
 
+	provider := provider{c, ctx, []byte(shdr.ChainID)}
+
 	verifier := lite.NewDynamicVerifier(
 		shdr.ChainID,
-		provider{c, ctx, []byte(shdr.ChainID)},
+		provider,
 		source,
 	)
 
 	err := verifier.Verify(shdr)
-	return err == nil
+	if err != nil {
+		return false
+	}
+
+	source.saveAll(provider)
+	return true
 }
 
 func (c conn) ready(ctx sdk.Context,
-	root merkle.KeyPath, registeredChainID ChainID, proof *merkle.Proof,
-	remoteconfig ConnConfig,
+	registeredChainID ChainID, proof *merkle.Proof, remoteconfig ConnConfig,
 ) bool {
 	if !transitStatus(ctx, c.status, ConnOpen, ConnReady) {
 		fmt.Println("ppp11")
@@ -117,7 +129,7 @@ func (c conn) ready(ctx sdk.Context,
 
 	var config ConnConfig
 	c.config.Get(ctx, &config)
-	config.RootKeyPath = root
+	fmt.Println("fff", config)
 	config.ChainID = registeredChainID
 
 	cpath, err := config.cpath()
@@ -125,7 +137,7 @@ func (c conn) ready(ctx sdk.Context,
 		fmt.Println("aaa11", err)
 		return false
 	}
-	bz, err := c.cdc.MarshalBinaryBare(remoteconfig)
+	bz, err := c.config.Cdc().MarshalBinaryBare(remoteconfig)
 	if err != nil {
 		fmt.Println("bbb11", err)
 		return false
@@ -140,19 +152,7 @@ func (c conn) ready(ctx sdk.Context,
 	c.config.Set(ctx, config)
 	c.commits.Set(ctx, config.Height(), config.ROT)
 
-	/*
-		// XXX
-		// send payload via perconn queue
-		c.meta.push(ctx, cdc.MustMarshalBinaryBare(PayloadConnReady{config}))
-	*/
-
-	return true
-}
-
-func (c conn) establish(ctx sdk.Context, p PayloadConnReady) bool {
-	if !transitStatus(ctx, c.status, ConnReady, ConnEstablished) {
-		return false
-	}
+	// TODO: check compat config.rot
 
 	return true
 }
@@ -167,6 +167,8 @@ func (c conn) verify(ctx sdk.Context, keypath merkle.KeyPath, proof *merkle.Proo
 
 	var commit lite.FullCommit
 	c.commits.Last(ctx, &commit)
+
+	fmt.Println("lastcommit", commit)
 
 	prt := merkle.DefaultProofRuntime()
 	prt.RegisterOpDecoder(iavl.ProofOpIAVLValue, iavl.IAVLValueOpDecoder)

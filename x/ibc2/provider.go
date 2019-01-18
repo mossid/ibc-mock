@@ -2,6 +2,7 @@ package ibc
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/lite"
@@ -57,6 +58,7 @@ func (p provider) SetLogger(logger log.Logger) {
 var _ lite.PersistentProvider = provider{}
 
 func (p provider) SaveFullCommit(fc lite.FullCommit) (err error) {
+	fmt.Println("save fullcommit", fc)
 	if fc.ChainID() != string(p.chainID) {
 		err = errors.New("invalid ChainID")
 		return
@@ -122,4 +124,10 @@ func (s Source) ValidatorSet(chainID string, height int64) (valset *tmtypes.Vali
 
 func (s Source) GetLastSignedHeader() tmtypes.SignedHeader {
 	return s.commits[len(s.commits)-1].SignedHeader
+}
+
+func (s Source) saveAll(p provider) {
+	for _, commit := range s.commits {
+		p.SaveFullCommit(commit)
+	}
 }

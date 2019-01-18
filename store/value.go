@@ -20,6 +20,10 @@ func (v Value) store(ctx Context) KVStore {
 	return v.base.store(ctx)
 }
 
+func (v Value) Cdc() cdc {
+	return v.base.Cdc()
+}
+
 func (v Value) Get(ctx Context, ptr interface{}) {
 	v.base.cdc.MustUnmarshalBinaryBare(v.store(ctx).Get(v.key), ptr)
 }
@@ -31,7 +35,7 @@ func (v Value) GetIfExists(ctx Context, ptr interface{}) {
 	}
 }
 
-func (v Value) GetSafe(ctx Context, ptr interface{}) *GetSafeError {
+func (v Value) GetSafe(ctx Context, ptr interface{}) error {
 	bz := v.store(ctx).Get(v.key)
 	if bz == nil {
 		return ErrEmptyValue()

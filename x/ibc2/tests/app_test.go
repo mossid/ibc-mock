@@ -94,6 +94,8 @@ type node struct {
 	lastheader abci.Header
 
 	connconfig ibc.ConnConfig
+
+	lastcommit int64
 }
 
 func getNode(t *testing.T) *node {
@@ -212,11 +214,15 @@ func (node *node) openConn(t *testing.T, target *node) sdk.Result {
 	// send MsgOpen
 	node.connconfig = ibc.ConnConfig{
 		ROT: target.commits[1],
+		RootKeyPath: new(merkle.KeyPath).
+			AppendKey([]byte("ibc"), merkle.KeyEncodingHex).
+			AppendKey([]byte{0x00}, merkle.KeyEncodingHex).String(),
 	}
 
 	msg := ibc.MsgOpen{
 		CustomChainID: customid,
 		ROT:           node.connconfig.ROT,
+		RootKeyPath:   node.connconfig.RootKeyPath,
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -227,6 +233,7 @@ func (node *node) openConn(t *testing.T, target *node) sdk.Result {
 }
 
 func (node *node) update(t *testing.T, target *node) sdk.Result {
+	fmt.Println("uuupdate", target.commits[target.lastheader.Height])
 	msg := ibc.MsgUpdate{
 		ChainID: node.targetchainid(),
 		Commits: []lite.FullCommit{target.commits[target.lastheader.Height]},
@@ -236,32 +243,36 @@ func (node *node) update(t *testing.T, target *node) sdk.Result {
 
 	require.True(t, res.IsOK())
 
+	node.lastcommit = target.lastheader.Height
+
 	return res
 }
 
 func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
 	qres := target.Query(abci.RequestQuery{
-		Path:  "/store/ibc/key",
-		Data:  append([]byte{0x00}, target.targetchainid()...),
-		Prove: true,
+		Path:   "/store/ibc/key",
+		Data:   append([]byte{0x00}, target.targetchainid()...),
+		Height: node.lastcommit,
+		Prove:  true,
 	})
-
-	fmt.Printf("id %x\nqres %x\n", target.targetchainid(), qres.Key)
 
 	require.True(t, qres.IsOK())
 
-	var connconfig ibc.ConnConfig
-	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &connconfig)
-	node.connconfig = connconfig
+	var config ibc.ConnConfig
+	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &config)
+
+	for _, commit := range target.commits {
+		fmt.Printf("%v\n", []byte(commit.SignedHeader.Header.AppHash))
+	}
 
 	msg := ibc.MsgReady{
-		ChainID: target.targetchainid(),
-		RootKeyPath: new(merkle.KeyPath).
-			AppendKey([]byte("ibc"), merkle.KeyEncodingHex).
-			AppendKey([]byte{0x00}, merkle.KeyEncodingHex),
-		Proof:  qres.Proof,
-		Config: node.connconfig,
+		ChainID:           node.targetchainid(),
+		RegisteredChainID: target.targetchainid(),
+		Proof:             qres.Proof,
+		RemoteConfig:      config,
 	}
+
+	node.connconfig.ChainID = node.targetchainid()
 
 	res := node.signCheckDeliver(t, msg, true)
 
@@ -328,9 +339,9 @@ func TestBasicConn(t *testing.T) {
 	node1.execblock(t, nil)
 	fmt.Println("node2 execblock")
 	node2.execblock(t, nil)
-	fmt.Println("node1 openconn")
+	fmt.Println("node1 open")
 	node1.openConn(t, node2)
-	fmt.Println("node2 openconn")
+	fmt.Println("node2 open")
 	node2.openConn(t, node1)
 	fmt.Println("node1 update")
 	node1.update(t, node2)

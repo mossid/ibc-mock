@@ -28,7 +28,7 @@ func handleMsgOpen(ctx sdk.Context, k Keeper, msg MsgOpen) sdk.Result {
 
 	fmt.Printf("id %x\n", id)
 
-	if !k.conn(id).open(ctx, msg.ROT) {
+	if !k.conn(id).open(ctx, msg.ROT, msg.RootKeyPath) {
 		return ErrConnOpenFailed(DefaultCodespace).Result()
 	}
 
@@ -36,11 +36,10 @@ func handleMsgOpen(ctx sdk.Context, k Keeper, msg MsgOpen) sdk.Result {
 }
 
 func handleMsgReady(ctx sdk.Context, k Keeper, msg MsgReady) sdk.Result {
-	fmt.Printf("id %x\n", msg.Config.ChainID)
+	fmt.Printf("readyid %x\n", msg.ChainID)
 
-	if !k.conn(msg.Config.ChainID).ready(ctx,
-		msg.RootKeyPath, msg.ChainID, msg.Proof,
-		msg.Config,
+	if !k.conn(msg.ChainID).ready(ctx,
+		msg.RegisteredChainID, msg.Proof, msg.RemoteConfig,
 	) {
 		return ErrConnReadyFailed(DefaultCodespace).Result()
 	}

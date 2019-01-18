@@ -12,6 +12,7 @@ const Route = "ibc"
 type MsgOpen struct {
 	CustomChainID string          `json:"custom-chain-id"`
 	ROT           lite.FullCommit `json:"rot"`
+	RootKeyPath   string          `json:"root-key-path"`
 	Signer        sdk.AccAddress  `json:"signer"`
 }
 
@@ -66,11 +67,11 @@ func (msg MsgUpdate) GetSigners() []sdk.AccAddress {
 }
 
 type MsgReady struct {
-	ChainID     ChainID
-	RootKeyPath merkle.KeyPath
-	Proof       *merkle.Proof
-	Config      ConnConfig
-	Signer      sdk.AccAddress
+	ChainID           ChainID
+	RegisteredChainID ChainID
+	Proof             *merkle.Proof
+	Signer            sdk.AccAddress
+	RemoteConfig      ConnConfig
 }
 
 var _ sdk.Msg = MsgReady{}

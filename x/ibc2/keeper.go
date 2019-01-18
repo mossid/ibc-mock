@@ -22,14 +22,16 @@ type queue struct {
 }
 
 type port struct {
+	id PortID
+
 	// state structure is enforced
 	config store.Value
 	queue  func(ChainID) queue
-
-	meta queue
 }
 
 type conn struct {
+	id ChainID
+
 	// state structure is enforced
 	config store.Value // ChainConfig
 
@@ -39,9 +41,6 @@ type conn struct {
 
 	// internal reference
 	localconfig store.Value
-
-	// misc
-	cdc *codec.Codec
 }
 
 type Keeper struct {
@@ -75,15 +74,16 @@ func newKeeper(enfbase store.Base, freebase store.Base) (k Keeper) {
 		conn: func(chainID ChainID) conn {
 			bz := chainID[:]
 			return conn{
+				id:          chainID,
 				config:      store.NewValue(enfbase, bz),
 				status:      store.NewValue(csbase, bz),
 				commits:     store.NewIndexer(cmbase, bz, store.BinIndexerEnc),
 				localconfig: k.config,
-				cdc:         cdc,
 			}
 		},
 		port: func(portID PortID) port {
 			return port{
+				id:     portID,
 				config: store.NewValue(enfbase, append(ChainID{}, portID[:]...)),
 				queue: func(chainID ChainID) queue {
 					bz := bytes.Join([][]byte{chainID[:], portID[:]}, nil)
@@ -101,6 +101,10 @@ func newKeeper(enfbase store.Base, freebase store.Base) (k Keeper) {
 
 	return
 
+}
+
+// keeperConfig is stored in Keeper.Config, working as a magic number for IBC root
+type keeperConfig struct {
 }
 
 /*

@@ -10,8 +10,8 @@ type ChainID = []byte
 type PortID = []byte
 
 const (
-	QueueIdle        Status = iota // Port is not opened
-	QueueEstablished               // Compatability checked, ready to use
+	QueueIdle  Status = iota // Port is not opened
+	QueueReady               // Compatability checked, ready to use
 )
 
 type PortConfig interface {
@@ -20,7 +20,11 @@ type PortConfig interface {
 }
 
 func (p port) push(ctx sdk.Context, chainID ChainID, data []byte) bool {
-	if !assertStatus(ctx, p.queue(chainID).status, QueueEstablished) {
+	if !assertStatus(ctx, p.queue(chainID).status, QueueReady) {
+		return false
+	}
+
+	if !assertStatus(ctx, p.queue(chainID).conn.status, ConnOpen, ConnReady) {
 		return false
 	}
 
@@ -40,21 +44,44 @@ func (p port) init(ctx sdk.Context, config PortConfig) bool {
 	return true
 }
 
-func (p port) establish(
+func (p port) ready(
 	ctx sdk.Context,
 	chainID ChainID, proof *merkle.Proof, remoteconfig PortConfig) bool {
-	if !transitStatus(ctx, p.queue(chainID).status, QueueIdle, QueueEstablished) {
+	if !transitStatus(ctx, p.queue(chainID).status, QueueIdle, QueueReady) {
 		return false
 	}
 
-	conn := p.queue(chainID).conn
-	if !assertStatus(ctx, conn.status, ConnEstablished) {
+	if !assertStatus(ctx, p.queue(chainID).conn.status, ConnOpen, ConnReady) {
 		return false
 	}
 
-	var config PortConfig
-	p.config.Get(ctx, &config)
-	if !config.IsCompatibleWith(remoteconfig) {
+	var pconfig PortConfig
+	err := p.config.GetSafe(ctx, &pconfig)
+	if err != nil {
+		return false
+	}
+
+	bz, err := p.config.Cdc().MarshalBinaryBare(remoteconfig)
+	if err != nil {
+		return false
+	}
+
+	var cconfig ConnConfig
+	err = p.config.GetSafe(ctx, &cconfig)
+	if err != nil {
+		return false
+	}
+
+	path, err := cconfig.ppath(p.id)
+	if err != nil {
+		return false
+	}
+
+	if !p.queue(chainID).conn.verify(ctx, path, proof, bz) {
+		return false
+	}
+
+	if !pconfig.IsCompatibleWith(remoteconfig) {
 		return false
 	}
 

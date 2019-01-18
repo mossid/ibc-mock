@@ -54,6 +54,10 @@ func (base Base) Prefix(prefix []byte) (res Base) {
 	return
 }
 
+func (base Base) Cdc() cdc {
+	return cdc{base.cdc}
+}
+
 func (base Base) key(key []byte) []byte {
 	return join(base.prefix, key)
 }
