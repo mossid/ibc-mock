@@ -4,20 +4,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 )
 
-var cdc *codec.Codec
-
-func init() {
-	cdc = codec.New()
-	codec.RegisterCrypto(cdc)
-	RegisterCodec(cdc)
-}
+var msgCdc *codec.Codec
 
 func RegisterCodec(cdc *codec.Codec) {
-	cdc.RegisterConcrete(MsgOpen{}, "ibc/MsgOpen", nil)
-	cdc.RegisterConcrete(MsgReceive{}, "ibc/MsgReceive", nil)
-
-	cdc.RegisterConcrete(Header{}, "ibc/Header", nil)
-	cdc.RegisterInterface((*Payload)(nil), nil)
-	cdc.RegisterConcrete(Proof{}, "ibc/Proof", nil)
-	cdc.RegisterConcrete(Packet{}, "ibc/Packet", nil)
+	cdc.RegisterInterface((*User)(nil), nil)
+	cdc.RegisterInterface((*Packet)(nil), nil)
+	cdc.RegisterConcrete(ChannelUser{}, "ibc/ChannelUser", nil)
+	cdc.RegisterConcrete(ConnConfig{}, "ibc/ConnConfig", nil)
+	cdc.RegisterConcrete(PortConfig{}, "ibc/PortConfig", nil)
 }

@@ -11,9 +11,7 @@ const (
 
 	CodeEmptyMsg          CodeType = 101
 	CodePacketsNotUniform CodeType = 102
-	CodeConnOpenFailed    CodeType = 103
-	CodeConnUpdateFailed  CodeType = 104
-	CodeConnReadyFailed   CodeType = 105
+	CodeAnteFailed        CodeType = 103
 )
 
 func ErrEmptyMsg(codespace sdk.CodespaceType) sdk.Error {
@@ -24,14 +22,6 @@ func ErrPacketsNotUniform(codespace sdk.CodespaceType, msg string) sdk.Error {
 	return sdk.NewError(codespace, CodePacketsNotUniform, msg)
 }
 
-func ErrConnOpenFailed(codespace sdk.CodespaceType) sdk.Error {
-	return sdk.NewError(codespace, CodeConnOpenFailed, "")
-}
-
-func ErrConnUpdateFailed(codespace sdk.CodespaceType) sdk.Error {
-	return sdk.NewError(codespace, CodeConnUpdateFailed, "")
-}
-
-func ErrConnReadyFailed(codespace sdk.CodespaceType) sdk.Error {
-	return sdk.NewError(codespace, CodeConnReadyFailed, "")
+func ErrAnteFailed(codespace sdk.CodespaceType) sdk.Error {
+	return sdk.NewError(codespace, CodeAnteFailed, "")
 }

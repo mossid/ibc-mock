@@ -47,8 +47,16 @@ func (v Value) GetSafe(ctx Context, ptr interface{}) error {
 	return nil
 }
 
+func (v Value) GetRaw(ctx Context) []byte {
+	return v.store(ctx).Get(v.key)
+}
+
 func (v Value) Set(ctx Context, o interface{}) {
 	v.store(ctx).Set(v.key, v.base.cdc.MustMarshalBinaryBare(o))
+}
+
+func (v Value) SetRaw(ctx Context, bz []byte) {
+	v.store(ctx).Set(v.key, bz)
 }
 
 func (v Value) Exists(ctx Context) bool {

@@ -16,7 +16,7 @@ import (
 type provider struct {
 	conn
 	ctx     sdk.Context
-	chainID ChainID
+	chainID []byte
 }
 
 var _ lite.Provider = provider{}

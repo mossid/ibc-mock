@@ -1,36 +1,28 @@
 package ibc
 
 import (
+	"fmt"
+
 	"github.com/tendermint/tendermint/crypto/merkle"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type ChainID = []byte
-type PortID = []byte
+type ChainID = [8]byte
+type PortID = [8]byte
 
 const (
-	QueueIdle  Status = iota // Port is not opened
-	QueueReady               // Compatability checked, ready to use
+	QueueIdle  Status = iota // ready to send if portconfig exists
+	QueueReady               // compatability checked, ready to receive
 )
 
+/*
 type PortConfig interface {
 	RequiredStatus() Status
 	IsCompatibleWith(PortConfig) bool
 }
-
-func (p port) push(ctx sdk.Context, chainID ChainID, data []byte) bool {
-	if !assertStatus(ctx, p.queue(chainID).status, QueueReady) {
-		return false
-	}
-
-	if !assertStatus(ctx, p.queue(chainID).conn.status, ConnOpen, ConnReady) {
-		return false
-	}
-
-	p.queue(chainID).outgoing.Push(ctx, data)
-
-	return true
+*/
+type PortConfig struct {
 }
 
 // Called when the internal logic deployes initializes new port
@@ -39,25 +31,37 @@ func (p port) init(ctx sdk.Context, config PortConfig) bool {
 		return false
 	}
 
+	fmt.Println("ttttttttttttt")
 	p.config.Set(ctx, config)
+
+	return true
+}
+
+func (p port) push(ctx sdk.Context, chainID ChainID, o interface{}) bool {
+	if !p.config.Exists(ctx) {
+		return false
+	}
+
+	if !assertMinStatus(ctx, p.queue(chainID).conn.status, ConnSpeak) {
+		return false
+	}
+
+	p.queue(chainID).outgoing.Push(ctx, o)
 
 	return true
 }
 
 func (p port) ready(
 	ctx sdk.Context,
-	chainID ChainID, proof *merkle.Proof, remoteconfig PortConfig) bool {
-	if !transitStatus(ctx, p.queue(chainID).status, QueueIdle, QueueReady) {
-		return false
-	}
-
-	if !assertStatus(ctx, p.queue(chainID).conn.status, ConnOpen, ConnReady) {
-		return false
-	}
-
+	chainID ChainID, height uint64, proof *merkle.Proof, remoteconfig PortConfig,
+) bool {
 	var pconfig PortConfig
 	err := p.config.GetSafe(ctx, &pconfig)
 	if err != nil {
+		return false
+	}
+
+	if !transitStatus(ctx, p.queue(chainID).status, QueueIdle, QueueReady) {
 		return false
 	}
 
@@ -77,13 +81,42 @@ func (p port) ready(
 		return false
 	}
 
-	if !p.queue(chainID).conn.verify(ctx, path, proof, bz) {
+	if !p.queue(chainID).conn.verify(ctx, path, height, proof, bz) {
 		return false
 	}
 
-	if !pconfig.IsCompatibleWith(remoteconfig) {
-		return false
-	}
+	// TODO
+	/*
+		if !pconfig.IsCompatibleWith(remoteconfig) {
+			return false
+		}
+	*/
 
 	return true
 }
+
+func (p port) cleanup(ctx sdk.Context, chainID ChainID, proof *merkle.Proof, seq uint64) bool {
+	if !assertMinStatus(ctx, p.queue(chainID).status, QueueReady) {
+		return false
+	}
+
+	return false // TODO
+}
+
+/*
+func (p port) pull(ctx sdk.Context, chainID ChainID) bool {
+	q := p.queue(chainID)
+
+	if !assertMinStatus(ctx, q.conn.status, ConnListen) {
+		return false
+	}
+
+	if !assertMinStatus(ctx, q.status, QueueReady) {
+		return false
+	}
+
+
+
+	return true
+}
+*/

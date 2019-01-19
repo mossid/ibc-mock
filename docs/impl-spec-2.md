@@ -17,7 +17,6 @@ Under this subspace, actual interchain messages are stored. The messages are sto
 Examples: 
 ```
 0xR002: root key for the ibc module, stores IBC config, magic number for IBC
-
 0xR002|ABCD: config key for chain ABCD, stores verified remote IBC configuration
 0xR002|0000|CAFEBABE: config key for port CAFEBABE, stores port configuration
 0xR002|ABCD|CAFEBABE: stores the length of the queue, used for cleaning up on the other chain

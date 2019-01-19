@@ -13,7 +13,8 @@ type Mapping struct {
 
 func NewMapping(base Base, prefix []byte) Mapping {
 	return Mapping{
-		base: base.Prefix(prefix),
+		base:  base.Prefix(prefix),
+		start: []byte{}, // preventing nil key access in store.Last
 	}
 }
 

@@ -4,68 +4,68 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type PayloadQueueOpen struct {
+type PacketQueueOpen struct {
 	Config PortConfig
 }
 
-var _ Payload = PayloadQueueOpen{}
+var _ Packet = PacketQueueOpen{}
 
-func (p PayloadQueueOpen) Route() string {
+func (p PacketQueueOpen) Route() string {
 	return "ibc"
 }
 
-func (p PayloadQueueOpen) Type() string {
+func (p PacketQueueOpen) Type() string {
 	return "payload_queue_ready"
 }
 
-func (p PayloadQueueOpen) ValidateBasic() sdk.Error {
+func (p PacketQueueOpen) ValidateBasic() sdk.Error {
 	return nil // TODO
 }
 
-func (p PayloadQueueOpen) GetSignBytes() []byte {
-	return cdc.MustMarshalJSON(p) // TODO
+func (p PacketQueueOpen) GetSignBytes() []byte {
+	return msgCdc.MustMarshalJSON(p) // TODO
 }
 
-type PayloadConnOpen struct {
+type PacketConnOpen struct {
 	Config ConnConfig
 }
 
-var _ Payload = PayloadConnOpen{}
+var _ Packet = PacketConnOpen{}
 
-func (p PayloadConnOpen) Route() string {
+func (p PacketConnOpen) Route() string {
 	return "ibc"
 }
 
-func (p PayloadConnOpen) Type() string {
+func (p PacketConnOpen) Type() string {
 	return "payload_conn_open"
 }
 
-func (p PayloadConnOpen) ValidateBasic() sdk.Error {
+func (p PacketConnOpen) ValidateBasic() sdk.Error {
 	return nil // TODO
 }
 
-func (p PayloadConnOpen) GetSignBytes() []byte {
-	return cdc.MustMarshalJSON(p) // TODO
+func (p PacketConnOpen) GetSignBytes() []byte {
+	return msgCdc.MustMarshalJSON(p) // TODO
 }
 
-type PayloadConnReady struct {
+type PacketConnReady struct {
 	Config ConnConfig
 }
 
-var _ Payload = PayloadConnReady{}
+var _ Packet = PacketConnReady{}
 
-func (p PayloadConnReady) Route() string {
+func (p PacketConnReady) Route() string {
 	return "ibc"
 }
 
-func (p PayloadConnReady) Type() string {
+func (p PacketConnReady) Type() string {
 	return "payload_conn_ready"
 }
 
-func (p PayloadConnReady) ValidateBasic() sdk.Error {
+func (p PacketConnReady) ValidateBasic() sdk.Error {
 	return nil // TODO
 }
 
-func (p PayloadConnReady) GetSignBytes() []byte {
-	return cdc.MustMarshalJSON(p) // TODO
+func (p PacketConnReady) GetSignBytes() []byte {
+	return msgCdc.MustMarshalJSON(p) // TODO
 }

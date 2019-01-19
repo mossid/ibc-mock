@@ -1,4 +1,4 @@
-package ibc
+package ibctest
 
 import (
 	"fmt"
@@ -16,19 +16,22 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/mock"
 
+	"github.com/mossid/ibc-mock/store"
 	"github.com/mossid/ibc-mock/x/ibc2"
 )
 
-const customid = "mychain"
+var customid = ibc.ChainID{0x01, 0x23, 0x34, 0x56, 0x78, 0x89, 0xAB, 0xCD}
+var portid = ibc.PortID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 
 func registerCodec(cdc *codec.Codec) {
 	ibc.RegisterCodec(cdc)
+	RegisterCodec(cdc)
 	cdc.RegisterInterface((*tmtypes.PrivValidator)(nil), nil)
 	cdc.RegisterConcrete(mockPV{}, "test/mockPV", nil)
 	cdc.RegisterConcrete(MockValidator{}, "test/MockValidator", nil)
 }
 
-func getMockApp(t *testing.T) (*mock.App, ibc.Keeper, MockValidatorSet, []MockValidator) {
+func getMockApp(t *testing.T) (*mock.App, keeper, MockValidatorSet, []MockValidator) {
 	mApp := mock.NewApp()
 
 	registerCodec(mApp.Cdc)
@@ -37,15 +40,19 @@ func getMockApp(t *testing.T) (*mock.App, ibc.Keeper, MockValidatorSet, []MockVa
 	valsetkey := sdk.NewKVStoreKey("valset")
 	vals := getValidators()
 	valset := NewMockValidatorSet(mApp.Cdc, valsetkey)
-	keeper := ibc.NewKeeper(mApp.Cdc, key)
+	ibck := ibc.NewKeeper(mApp.Cdc, key)
+	keeper := newKeeper(ibck.Channel(Route))
 
-	mApp.Router().AddRoute("ibc", ibc.NewHandler(keeper))
-	mApp.SetInitChainer(getInitChainer(keeper, valset, vals))
-	mApp.SetAnteHandler(nil) // overriding antehandler to bypass auth logic
-	mApp.SetBeginBlocker(func(ctx sdk.Context, req abci.RequestBeginBlock) (res abci.ResponseBeginBlock) {
-		ibc.BeginBlock(ctx, keeper)
-		return
-	})
+	mApp.Router().AddRoute("ibctest", NewHandler(keeper))
+	mApp.SetInitChainer(getInitChainer(ibck, valset, vals))
+	// overriding antehandler to bypass auth logic
+	mApp.SetAnteHandler(ibc.NewAnteHandler(ibck))
+	/*
+		mApp.SetBeginBlocker(func(ctx sdk.Context, req abci.RequestBeginBlock) (res abci.ResponseBeginBlock) {
+			ibc.BeginBlock(ctx, keeper)
+			return
+		})
+	*/
 	mApp.SetEndBlocker(nil)
 
 	require.NoError(t, mApp.CompleteSetup(key, valsetkey))
@@ -83,7 +90,7 @@ func getValidators() []MockValidator {
 
 type node struct {
 	*mock.App
-	k      ibc.Keeper
+	k      keeper
 	valset MockValidatorSet
 
 	vals    []MockValidator
@@ -108,10 +115,6 @@ func getNode(t *testing.T) *node {
 		vals:    vals,
 		commits: make(map[int64]lite.FullCommit),
 	}
-}
-
-func (node *node) targetchainid() []byte {
-	return node.connconfig.UniqueID(customid)
 }
 
 func (node *node) simulateSigning() {
@@ -210,19 +213,30 @@ func (node *node) startChain(t *testing.T) {
 	node.InitChain(abci.RequestInitChain{})
 }
 
-func (node *node) openConn(t *testing.T, target *node) sdk.Result {
-	// send MsgOpen
+func (node *node) speakConn(t *testing.T, target *node) sdk.Result {
+	msg := MsgSpeak{
+		ChainID: customid,
+	}
+
+	res := node.signCheckDeliver(t, msg, true)
+
+	require.True(t, res.IsOK())
+
+	return res
+}
+
+func (node *node) listenConn(t *testing.T, target *node) sdk.Result {
 	node.connconfig = ibc.ConnConfig{
 		ROT: target.commits[1],
 		RootKeyPath: new(merkle.KeyPath).
 			AppendKey([]byte("ibc"), merkle.KeyEncodingHex).
 			AppendKey([]byte{0x00}, merkle.KeyEncodingHex).String(),
+		ChainID: customid,
 	}
 
-	msg := ibc.MsgOpen{
-		CustomChainID: customid,
-		ROT:           node.connconfig.ROT,
-		RootKeyPath:   node.connconfig.RootKeyPath,
+	msg := MsgListen{
+		ChainID: customid,
+		Config:  node.connconfig,
 	}
 
 	res := node.signCheckDeliver(t, msg, true)
@@ -233,9 +247,8 @@ func (node *node) openConn(t *testing.T, target *node) sdk.Result {
 }
 
 func (node *node) update(t *testing.T, target *node) sdk.Result {
-	fmt.Println("uuupdate", target.commits[target.lastheader.Height])
-	msg := ibc.MsgUpdate{
-		ChainID: node.targetchainid(),
+	msg := MsgUpdate{
+		ChainID: customid,
 		Commits: []lite.FullCommit{target.commits[target.lastheader.Height]},
 	}
 
@@ -248,10 +261,10 @@ func (node *node) update(t *testing.T, target *node) sdk.Result {
 	return res
 }
 
-func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
+func (node *node) speakSafeConn(t *testing.T, target *node) sdk.Result {
 	qres := target.Query(abci.RequestQuery{
 		Path:   "/store/ibc/key",
-		Data:   append([]byte{0x00}, target.targetchainid()...),
+		Data:   append([]byte{0x00}, customid[:]...),
 		Height: node.lastcommit,
 		Prove:  true,
 	})
@@ -265,14 +278,13 @@ func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
 		fmt.Printf("%v\n", []byte(commit.SignedHeader.Header.AppHash))
 	}
 
-	msg := ibc.MsgReady{
-		ChainID:           node.targetchainid(),
-		RegisteredChainID: target.targetchainid(),
+	msg := MsgSpeakSafe{
+		ChainID:           customid,
+		RegisteredChainID: customid,
+		Height:            uint64(qres.Height),
 		Proof:             qres.Proof,
 		RemoteConfig:      config,
 	}
-
-	node.connconfig.ChainID = node.targetchainid()
 
 	res := node.signCheckDeliver(t, msg, true)
 
@@ -280,13 +292,13 @@ func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
 
 	// relay PayloadConnListening
 	/*
-			msg := ibc.MsgReceive{
-				Packets: []ibc.Packet{ibc.Packet{
-					Header: ibc.Header{
+			msg := MsgReceive{
+				Packets: []Packet{Packet{
+					Header: Header{
 						Source:      target.chainid(),
 						Destination: node.chainid(),
 					},
-					Payload: ibc.PayloadConnListening{
+					Payload: PayloadConnListening{
 						Config:  target.connconfig,
 						ChainID: target.chainid(),
 					},
@@ -300,6 +312,67 @@ func (node *node) readyConn(t *testing.T, target *node) sdk.Result {
 
 		return res
 	*/
+	return sdk.Result{}
+}
+
+func (node *node) init(t *testing.T) {
+	msg := MsgInit{
+		PortID: portid,
+		Config: ibc.PortConfig{}, // TODO
+	}
+
+	res := node.signCheckDeliver(t, msg, true)
+
+	require.True(t, res.IsOK())
+}
+
+func (node *node) push(t *testing.T, message string) sdk.Result {
+	msg := MsgPushMessage{
+		ChainID: customid,
+		PortID:  portid,
+		Message: message,
+	}
+
+	res := node.signCheckDeliver(t, msg, true)
+
+	require.True(t, res.IsOK())
+
+	return res
+}
+
+func (node *node) pull(t *testing.T, target *node, seq uint64, message string) sdk.Result {
+	qres := target.Query(abci.RequestQuery{
+		Path: "/store/ibc/key",
+		Data: append(append(append(
+			[]byte{0x00},
+			customid[:]...),
+			portid[:]...),
+			store.EncodeIndex(seq, store.BinIndexerEnc)...,
+		),
+		Height: node.lastcommit,
+		Prove:  true,
+	})
+
+	require.True(t, qres.IsOK())
+
+	fmt.Printf("qres %x %+v\n", qres.Value, qres)
+
+	var packet ibc.Packet
+	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &packet)
+	fmt.Printf("packet %+v\n", packet)
+
+	msg := ibc.MsgPull{
+		ChainID: customid,
+		PortID:  portid,
+		Packets: []ibc.Packet{packet},
+		Proof:   qres.Proof,
+		Height:  uint64(qres.Height),
+	}
+
+	res := node.signCheckDeliver(t, msg, true)
+
+	require.True(t, res.IsOK())
+
 	return sdk.Result{}
 }
 
@@ -340,17 +413,28 @@ func TestBasicConn(t *testing.T) {
 	fmt.Println("node2 execblock")
 	node2.execblock(t, nil)
 	fmt.Println("node1 open")
-	node1.openConn(t, node2)
+	node1.speakConn(t, node2)
 	fmt.Println("node2 open")
-	node2.openConn(t, node1)
+	node2.speakConn(t, node1)
+	fmt.Println("node1 ready")
+	node1.listenConn(t, node2)
+	fmt.Println("node2 ready")
+	node2.listenConn(t, node1)
 	fmt.Println("node1 update")
 	node1.update(t, node2)
 	fmt.Println("node2 update")
 	node2.update(t, node1)
-	fmt.Println("node1 ready")
-	node1.readyConn(t, node2)
-	fmt.Println("node2 ready")
-	node2.readyConn(t, node1)
+
+	fmt.Println("node1 init")
+	node1.init(t)
+	fmt.Println("node2 init")
+	node2.init(t)
+	fmt.Println("[node1 ->] node2")
+	node1.push(t, "testmessage")
+	fmt.Println("node2 update")
+	node2.update(t, node1)
+	fmt.Println("node1 [-> node2]")
+	node2.pull(t, node1, 0, "testmessage")
 }
 
 /*

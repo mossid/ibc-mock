@@ -27,6 +27,17 @@ type port struct {
 	// state structure is enforced
 	config store.Value
 	queue  func(ChainID) queue
+
+	cdc *codec.Codec
+}
+
+func PortPrefix() []byte {
+	id := ChainID{}
+	return id[:]
+}
+
+type User interface {
+	Satisfy(User) bool
 }
 
 type conn struct {
@@ -38,9 +49,12 @@ type conn struct {
 	// state structure is not enforced
 	status  store.Value
 	commits store.Indexer
+	owner   store.Value
 
 	// internal reference
 	localconfig store.Value
+
+	cdc *codec.Codec
 }
 
 type Keeper struct {
@@ -49,25 +63,33 @@ type Keeper struct {
 	conn   func(ChainID) conn
 	port   func(PortID) port
 
-	// state structure is not enforced
-	checkpoints store.Mapping // tmtypes.Header.Hash() -> bool
+	cdc *codec.Codec
 }
 
 func NewKeeper(cdc *codec.Codec, key sdk.StoreKey) Keeper {
+	/*
+		if msgCdc != nil {
+			if cdc != msgCdc {
+				panic("NewKeeper() called with different cdc")
+			}
+		}
+	*/
+	// XXX: unsafe
+	msgCdc = cdc
 	base := store.NewBase(cdc, key)
-	return newKeeper(base.Prefix([]byte{0x00}), base.Prefix([]byte{0x01}))
+	return newKeeper(cdc, base.Prefix([]byte{0x00}), base.Prefix([]byte{0x01}))
 }
 
 func DummyKeeper() Keeper {
-	return newKeeper(store.NewBase(nil, nil), store.NewBase(nil, nil))
+	return newKeeper(nil, store.NewBase(nil, nil), store.NewBase(nil, nil))
 }
 
-func newKeeper(enfbase store.Base, freebase store.Base) (k Keeper) {
+func newKeeper(cdc *codec.Codec, enfbase store.Base, freebase store.Base) (k Keeper) {
 	// structure-free keys
 	cmbase := freebase.Prefix([]byte{0x00}) // commit
 	csbase := freebase.Prefix([]byte{0x01}) // conn status
 	qsbase := freebase.Prefix([]byte{0x02}) // queue status
-	ckbase := freebase.Prefix([]byte{0x03}) // checkpoints
+	cobase := freebase.Prefix([]byte{0x03}) // conn ownership
 
 	k = Keeper{
 		config: store.NewValue(enfbase, []byte{}),
@@ -78,13 +100,15 @@ func newKeeper(enfbase store.Base, freebase store.Base) (k Keeper) {
 				config:      store.NewValue(enfbase, bz),
 				status:      store.NewValue(csbase, bz),
 				commits:     store.NewIndexer(cmbase, bz, store.BinIndexerEnc),
+				owner:       store.NewValue(cobase, bz),
 				localconfig: k.config,
+				cdc:         cdc,
 			}
 		},
 		port: func(portID PortID) port {
 			return port{
 				id:     portID,
-				config: store.NewValue(enfbase, append(ChainID{}, portID[:]...)),
+				config: store.NewValue(enfbase, append(PortPrefix(), portID[:]...)),
 				queue: func(chainID ChainID) queue {
 					bz := bytes.Join([][]byte{chainID[:], portID[:]}, nil)
 					return queue{
@@ -94,9 +118,10 @@ func newKeeper(enfbase store.Base, freebase store.Base) (k Keeper) {
 						conn:     k.conn(chainID),
 					}
 				},
+				cdc: cdc,
 			}
 		},
-		checkpoints: store.NewMapping(ckbase, []byte{}),
+		cdc: cdc,
 	}
 
 	return

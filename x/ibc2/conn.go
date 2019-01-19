@@ -5,7 +5,6 @@ import (
 
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/crypto/merkle"
-	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/lite"
 	tmtypes "github.com/tendermint/tendermint/types"
 
@@ -14,15 +13,28 @@ import (
 )
 
 const (
-	ConnIdle  Status = iota // not opened
-	ConnOpen                // ready to send packets
-	ConnReady               // ready to receive packets
+	// not opened
+	ConnIdle Status = iota
+	// ready to send packets
+	ConnSpeak
+	// ready to receive packets
+	ConnListen
+	// counterchain is tracking us
+	// ready to safely send packets
+	ConnSpeakSafe
+	// counterchain approved we are tracking them
+	// ready to safely receive packets
+	ConnListenSafe
 )
 
 type ConnConfig struct {
 	ROT         lite.FullCommit // Root-of-trust fullcommit from the other chain
 	ChainID     ChainID         // ChainID of this chain registered on the other chain
 	RootKeyPath string          // Root keypath of ibc module on the other chain
+}
+
+func (config ConnConfig) IsEmpty() bool {
+	return len(config.ChainID) == 0
 }
 
 func (config ConnConfig) Height() uint64 {
@@ -34,10 +46,7 @@ func (config ConnConfig) Height() uint64 {
 }
 
 func UniqueID(header *tmtypes.Header, customID string) []byte {
-	hasher := tmhash.NewTruncated()
-	hasher.Write(header.Hash())
-	hasher.Write([]byte(customID))
-	return hasher.Sum(nil)
+	return ConcatHash(header.Hash(), []byte(customID))
 }
 
 func (config ConnConfig) UniqueID(customID string) []byte {
@@ -80,23 +89,45 @@ func (config ConnConfig) ppath(portID PortID) (merkle.KeyPath, error) {
 	return config.extendKeyPath(k.port(portID).config.Key())
 }
 
-func (c conn) open(ctx sdk.Context, rot lite.FullCommit, root string) bool {
-	if !transitStatus(ctx, c.status, ConnIdle, ConnOpen) {
+func (c conn) assertOwner(ctx sdk.Context, user User) bool {
+	if user == nil {
+		return true
+	}
+	var req User
+	c.owner.Get(ctx, &req)
+	return user.Satisfy(req)
+}
+
+func (c conn) speak(ctx sdk.Context, owner User) bool {
+	if !transitStatus(ctx, c.status, ConnIdle, ConnSpeak) {
 		return false
 	}
 
-	fmt.Println("vvv", root)
-	c.config.Set(ctx, ConnConfig{
-		ROT:         rot,
-		RootKeyPath: root,
-	})
-	c.commits.Set(ctx, uint64(rot.Height()), rot)
+	c.owner.Set(ctx, owner)
 
 	return true
 }
 
-func (c conn) update(ctx sdk.Context, source Source) bool {
-	if !assertStatus(ctx, c.status, ConnOpen, ConnReady) {
+func (c conn) listen(ctx sdk.Context, config ConnConfig, user User) bool {
+	if !c.assertOwner(ctx, user) {
+		return false
+	}
+	if !transitStatus(ctx, c.status, ConnSpeak, ConnListen) {
+		fmt.Println("ppp11")
+		return false
+	}
+
+	c.config.Set(ctx, config)
+	c.commits.Set(ctx, uint64(config.ROT.Height()), config.ROT)
+
+	return true
+}
+
+func (c conn) update(ctx sdk.Context, source Source, user User) bool {
+	if !c.assertOwner(ctx, user) {
+		return false
+	}
+	if !assertStatus(ctx, c.status, ConnSpeak, ConnListen) {
 		return false
 	}
 
@@ -119,18 +150,16 @@ func (c conn) update(ctx sdk.Context, source Source) bool {
 	return true
 }
 
-func (c conn) ready(ctx sdk.Context,
-	registeredChainID ChainID, proof *merkle.Proof, remoteconfig ConnConfig,
-) bool {
-	if !transitStatus(ctx, c.status, ConnOpen, ConnReady) {
-		fmt.Println("ppp11")
+func (c conn) speakSafe(ctx sdk.Context, height uint64, proof *merkle.Proof, remoteconfig ConnConfig, user User) bool {
+	if !c.assertOwner(ctx, user) {
+		return false
+	}
+	if !transitStatus(ctx, c.status, ConnListen, ConnSpeakSafe) {
 		return false
 	}
 
 	var config ConnConfig
 	c.config.Get(ctx, &config)
-	fmt.Println("fff", config)
-	config.ChainID = registeredChainID
 
 	cpath, err := config.cpath()
 	if err != nil {
@@ -143,16 +172,22 @@ func (c conn) ready(ctx sdk.Context,
 		return false
 	}
 
-	if !c.verify(ctx, cpath, proof, bz) {
+	if !c.verify(ctx, cpath, height, proof, bz) {
 		fmt.Println("ccc11")
 		return false
 	}
 
-	// set root-of-trust commit
-	c.config.Set(ctx, config)
-	c.commits.Set(ctx, config.Height(), config.ROT)
-
 	// TODO: check compat config.rot
+
+	// TODO: push approve payload to perconn
+
+	return true
+}
+
+func (c conn) listenSafe(ctx sdk.Context) bool {
+	if !transitStatus(ctx, c.status, ConnSpeakSafe, ConnListenSafe) {
+		return false
+	}
 
 	return true
 }
@@ -162,18 +197,22 @@ func (c conn) latestcommit(ctx sdk.Context) (index uint64, res lite.FullCommit, 
 	return
 }
 
-func (c conn) verify(ctx sdk.Context, keypath merkle.KeyPath, proof *merkle.Proof, value []byte) bool {
+func (c conn) verify(ctx sdk.Context, keypath merkle.KeyPath, height uint64, proof *merkle.Proof, value []byte) bool {
 	fmt.Printf("verify, %+v, %+v, %+v\n", keypath, proof, value)
 
 	var commit lite.FullCommit
-	c.commits.Last(ctx, &commit)
+	err := c.commits.GetSafe(ctx, height, &commit)
+	if err != nil {
+		return false
+	}
 
 	fmt.Println("lastcommit", commit)
 
 	prt := merkle.DefaultProofRuntime()
 	prt.RegisterOpDecoder(iavl.ProofOpIAVLValue, iavl.IAVLValueOpDecoder)
 	prt.RegisterOpDecoder(store.ProofOpMultiStore, store.MultiStoreProofOpDecoder)
-	err := prt.VerifyValue(proof, commit.SignedHeader.AppHash, keypath.String(), value)
+	fmt.Println("verify", prt, commit, keypath, value)
+	err = prt.VerifyValue(proof, commit.SignedHeader.AppHash, keypath.String(), value)
 	fmt.Println(err)
 	return err == nil
 }
