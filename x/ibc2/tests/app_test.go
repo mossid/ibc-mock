@@ -286,28 +286,6 @@ func (node *node) speakSafeConn(t *testing.T, target *node) sdk.Result {
 
 	require.True(t, res.IsOK())
 
-	// relay PayloadConnListening
-	/*
-			msg := MsgReceive{
-				Packets: []Packet{Packet{
-					Header: Header{
-						Source:      target.chainid(),
-						Destination: node.chainid(),
-					},
-					Payload: PayloadConnListening{
-						Config:  target.connconfig,
-						ChainID: target.chainid(),
-					},
-				}},
-			}
-
-
-		res := node.signCheckDeliver(t, msg, true)
-
-		require.True(t, res.IsOK())
-
-		return res
-	*/
 	return sdk.Result{}
 }
 
@@ -369,23 +347,6 @@ func (node *node) pull(t *testing.T, target *node, seq uint64, message string) s
 	return sdk.Result{}
 }
 
-func (node *node) openChannel(t *testing.T) {
-	// call MyChannel.Open()
-}
-
-func (node *node) establishChannel(t *testing.T) {
-	// relay PayloadChannelListening
-}
-
-func (node *node) sendPackets(t *testing.T) {
-	// send []MsgReceive, relay []MyPayload
-}
-
-func (node *node) updateConn(t *testing.T) {
-	// send MsgUpdate
-}
-
-/*
 func TestNode(t *testing.T) {
 	node := getNode(t)
 	node.startChain(t)
@@ -398,20 +359,20 @@ func TestNode(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
-*/
+
 func TestBasicConn(t *testing.T) {
 	node1, node2 := getNode(t), getNode(t)
 	fmt.Println("node1 execblock")
 	node1.execblock(t, nil)
 	fmt.Println("node2 execblock")
 	node2.execblock(t, nil)
-	fmt.Println("node1 open")
+	fmt.Println("node1 speak")
 	node1.speakConn(t, node2)
-	fmt.Println("node2 open")
+	fmt.Println("node2 speak")
 	node2.speakConn(t, node1)
-	fmt.Println("node1 ready")
+	fmt.Println("node1 listen")
 	node1.listenConn(t, node2)
-	fmt.Println("node2 ready")
+	fmt.Println("node2 listen")
 	node2.listenConn(t, node1)
 	fmt.Println("node1 update")
 	node1.update(t, node2)
