@@ -1,8 +1,6 @@
 package ibc
 
 import (
-	"fmt"
-
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -33,7 +31,6 @@ func assertStatus(ctx sdk.Context, value store.Value, expected ...Status) bool {
 }
 
 func transitStatus(ctx sdk.Context, value store.Value, from Status, to Status) bool {
-	fmt.Printf("transit %+v %v %v", value, from, to)
 	if !assertStatus(ctx, value, from) {
 		return false
 	}

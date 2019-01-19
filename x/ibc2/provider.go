@@ -2,7 +2,6 @@ package ibc
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/lite"
@@ -58,7 +57,6 @@ func (p provider) SetLogger(logger log.Logger) {
 var _ lite.PersistentProvider = provider{}
 
 func (p provider) SaveFullCommit(fc lite.FullCommit) (err error) {
-	fmt.Println("save fullcommit", fc)
 	if fc.ChainID() != string(p.chainID) {
 		err = errors.New("invalid ChainID")
 		return

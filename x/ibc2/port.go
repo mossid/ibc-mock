@@ -1,8 +1,6 @@
 package ibc
 
 import (
-	"fmt"
-
 	"github.com/tendermint/tendermint/crypto/merkle"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -31,7 +29,6 @@ func (p port) init(ctx sdk.Context, config PortConfig) bool {
 		return false
 	}
 
-	fmt.Println("ttttttttttttt")
 	p.config.Set(ctx, config)
 
 	return true

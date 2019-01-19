@@ -1,8 +1,6 @@
 package ibc
 
 import (
-	"fmt"
-
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/lite"
@@ -54,8 +52,6 @@ func (config ConnConfig) UniqueID(customID string) []byte {
 }
 
 func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err error) {
-
-	fmt.Printf("before\n%+v\n%x\n", config.RootKeyPath, key)
 	// TODO: optimize
 	keys, err := merkle.KeyPathToKeys(config.RootKeyPath)
 	if err != nil {
@@ -68,8 +64,6 @@ func (config ConnConfig) extendKeyPath(key []byte) (res merkle.KeyPath, err erro
 	for _, key := range keys {
 		res = res.AppendKey(key, merkle.KeyEncodingHex)
 	}
-
-	fmt.Printf("after\n%+v\n", res)
 
 	return
 }
@@ -113,7 +107,6 @@ func (c conn) listen(ctx sdk.Context, config ConnConfig, user User) bool {
 		return false
 	}
 	if !transitStatus(ctx, c.status, ConnSpeak, ConnListen) {
-		fmt.Println("ppp11")
 		return false
 	}
 
@@ -163,17 +156,14 @@ func (c conn) speakSafe(ctx sdk.Context, height uint64, proof *merkle.Proof, rem
 
 	cpath, err := config.cpath()
 	if err != nil {
-		fmt.Println("aaa11", err)
 		return false
 	}
 	bz, err := c.config.Cdc().MarshalBinaryBare(remoteconfig)
 	if err != nil {
-		fmt.Println("bbb11", err)
 		return false
 	}
 
 	if !c.verify(ctx, cpath, height, proof, bz) {
-		fmt.Println("ccc11")
 		return false
 	}
 
@@ -198,21 +188,15 @@ func (c conn) latestcommit(ctx sdk.Context) (index uint64, res lite.FullCommit, 
 }
 
 func (c conn) verify(ctx sdk.Context, keypath merkle.KeyPath, height uint64, proof *merkle.Proof, value []byte) bool {
-	fmt.Printf("verify, %+v, %+v, %+v\n", keypath, proof, value)
-
 	var commit lite.FullCommit
 	err := c.commits.GetSafe(ctx, height, &commit)
 	if err != nil {
 		return false
 	}
 
-	fmt.Println("lastcommit", commit)
-
 	prt := merkle.DefaultProofRuntime()
 	prt.RegisterOpDecoder(iavl.ProofOpIAVLValue, iavl.IAVLValueOpDecoder)
 	prt.RegisterOpDecoder(store.ProofOpMultiStore, store.MultiStoreProofOpDecoder)
-	fmt.Println("verify", prt, commit, keypath, value)
 	err = prt.VerifyValue(proof, commit.SignedHeader.AppHash, keypath.String(), value)
-	fmt.Println(err)
 	return err == nil
 }

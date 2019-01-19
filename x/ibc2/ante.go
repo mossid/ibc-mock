@@ -1,8 +1,6 @@
 package ibc
 
 import (
-	"fmt"
-
 	"github.com/tendermint/iavl"
 	"github.com/tendermint/tendermint/crypto/merkle"
 
@@ -24,7 +22,6 @@ func NewAnteHandler(k Keeper) sdk.AnteHandler {
 					// should not be happen, when a MsgPull fails
 					// later MsgPulls cannot be executed(see baseapp.go L642)
 					// but the sequence is still incremented
-					fmt.Println("zzzz")
 					return ctx, ErrAnteFailed(DefaultCodespace).Result(), true
 				}
 				flag = true
@@ -41,7 +38,6 @@ func NewAnteHandler(k Keeper) sdk.AnteHandler {
 		var config ConnConfig
 		err := k.conn(msg2.ChainID).config.GetSafe(ctx, &config)
 		if err != nil {
-			fmt.Println("xxxx")
 			return ctx, ErrAnteFailed(DefaultCodespace).Result(), true
 		}
 
@@ -51,17 +47,13 @@ func NewAnteHandler(k Keeper) sdk.AnteHandler {
 		for _, packet := range msg2.Packets {
 			keypath, err := config.mpath(msg2.PortID, seq)
 			if err != nil {
-				fmt.Println("vvvv")
 				return ctx, ErrAnteFailed(DefaultCodespace).Result(), true
 			}
 			bz, err := k.cdc.MarshalBinaryBare(packet)
 			if err != nil {
-				fmt.Println("bbbb")
 				return ctx, ErrAnteFailed(DefaultCodespace).Result(), true
 			}
-			fmt.Printf("antemarshal %+v %x\n", packet, bz)
 			if !k.conn(msg2.ChainID).verify(ctx, keypath, msg2.Height, msg2.Proof, bz) {
-				fmt.Println("nnnn")
 				return ctx, ErrAnteFailed(DefaultCodespace).Result(), true
 			}
 			seq = seq + 1

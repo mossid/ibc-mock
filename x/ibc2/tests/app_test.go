@@ -274,10 +274,6 @@ func (node *node) speakSafeConn(t *testing.T, target *node) sdk.Result {
 	var config ibc.ConnConfig
 	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &config)
 
-	for _, commit := range target.commits {
-		fmt.Printf("%v\n", []byte(commit.SignedHeader.Header.AppHash))
-	}
-
 	msg := MsgSpeakSafe{
 		ChainID:           customid,
 		RegisteredChainID: customid,
@@ -355,11 +351,8 @@ func (node *node) pull(t *testing.T, target *node, seq uint64, message string) s
 
 	require.True(t, qres.IsOK())
 
-	fmt.Printf("qres %x %+v\n", qres.Value, qres)
-
 	var packet ibc.Packet
 	node.App.Cdc.MustUnmarshalBinaryBare(qres.Value, &packet)
-	fmt.Printf("packet %+v\n", packet)
 
 	msg := ibc.MsgPull{
 		ChainID: customid,

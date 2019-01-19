@@ -1,8 +1,6 @@
 package ibctest
 
 import (
-	"fmt"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/mossid/ibc-mock/x/ibc2"
@@ -68,8 +66,6 @@ func handleMsgListen(ctx sdk.Context, k keeper, msg MsgListen) sdk.Result {
 }
 
 func handleMsgSpeakSafe(ctx sdk.Context, k keeper, msg MsgSpeakSafe) sdk.Result {
-	fmt.Printf("readyid %x\n", msg.ChainID)
-
 	if !k.ibc.SpeakSafe(ctx, msg.ChainID,
 		msg.Height, msg.Proof, msg.RemoteConfig, nil,
 	) {
@@ -87,8 +83,6 @@ func handleMsgListenSafe(ctx sdk.Context, k ibc.Keeper, msg MsgListenSafe) sdk.R
 */
 func handleMsgUpdate(ctx sdk.Context, k keeper, msg MsgUpdate) sdk.Result {
 	source := ibc.NewSource(msg.Commits[0].SignedHeader.Header, msg.Commits)
-
-	fmt.Printf("id %x\n", msg.ChainID)
 
 	if !k.ibc.Update(ctx, msg.ChainID, source, nil) {
 		return ErrConnUpdateFailed(DefaultCodespace).Result()
