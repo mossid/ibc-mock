@@ -6,8 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type ChainID = [8]byte
-type PortID = [8]byte
+type PortID = [20]byte
 
 const (
 	QueueIdle  Status = iota // ready to send if portconfig exists

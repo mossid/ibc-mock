@@ -10,6 +10,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+type ChainID = [20]byte
+
 const (
 	// not opened
 	ConnIdle Status = iota

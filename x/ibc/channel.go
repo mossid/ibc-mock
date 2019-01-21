@@ -2,22 +2,11 @@ package ibc
 
 import (
 	"github.com/tendermint/tendermint/crypto/merkle"
+	"github.com/tendermint/tendermint/crypto/tmhash"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	//	"github.com/mossid/ibc-mock/store"
 )
-
-type Channel struct {
-	route string
-	k     Keeper
-}
-
-func (k Keeper) Channel(route string) Channel {
-	return Channel{
-		route: route,
-		k:     k,
-	}
-}
 
 type ChannelUser struct {
 	Module  string
@@ -40,8 +29,27 @@ func (chuser ChannelUser) Satisfy(req User) bool {
 	return chuser.Address.Equals(chreq.Address)
 }
 
+type Channel struct {
+	portID PortID
+	route  string
+	k      Keeper
+}
+
+func (k Keeper) Channel(route string) (res Channel) {
+	res = Channel{
+		route: route,
+		k:     k,
+	}
+	copy(res.portID[:], tmhash.NewTruncated().Sum([]byte(route)))
+	return
+}
+
 func (ch Channel) user(user sdk.AccAddress) ChannelUser {
 	return ChannelUser{ch.route, user}
+}
+
+func (ch Channel) PortID() PortID {
+	return ch.portID
 }
 
 func (ch Channel) Speak(ctx sdk.Context, id ChainID, owner sdk.AccAddress) bool {
@@ -85,13 +93,18 @@ func (ch Channel) Init(ctx sdk.Context, id PortID, config PortConfig) bool {
 	return ch.k.port(id).init(ctx, config)
 }
 
-func (ch Channel) Push(ctx sdk.Context, portID PortID, chainID ChainID, p Packet) bool {
+func (ch Channel) Push(ctx sdk.Context, chainID ChainID, p Packet) bool {
 	if p.Route() != ch.route {
 		panic("invalid payload")
 	}
-	return ch.k.port(portID).push(ctx, chainID, p)
+	return ch.k.port(ch.portID).push(ctx, chainID, p)
 }
 
 func (ch Channel) Update(ctx sdk.Context, id ChainID, source Source, user sdk.AccAddress) bool {
 	return ch.k.conn(id).update(ctx, source, ch.user(user))
+}
+
+type StdChannel struct {
+	Packet  Channel
+	Receipt Channel
 }
